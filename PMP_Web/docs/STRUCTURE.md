@@ -35,7 +35,7 @@
 | `src/layouts/ProjectLayout.vue` | **项目壳**：侧栏 **三态**（全宽 / 仅图标 / 全收起 + 跨边「腰钮」）+ 顶栏 + `router-view`；品牌行 **48px** |
 | `src/components/PmpBrandMark.vue` | 侧栏 **品牌 SVG**（叠层条 + 圆点，`currentColor`） |
 | `src/config/projectModuleMenuIcons.ts` | 项目侧栏 **各模块菜单图标**（按路由名语义映射） |
-| `src/components/AppHeaderBar.vue` | 顶栏：工作台为 **标题**；项目内为 **项目名 + 切换图标 + `-` + 页标题**；另 **`功能`** 下拉、主题、用户、退出 |
+| `src/components/AppHeaderBar.vue` | 顶栏：工作台为 **标题**（`/settings/*` 时加 **回到项目列表**）；项目内为 **项目名 + 切换 + `-` + 页标题**；**功能** 下拉、主题、用户、退出 |
 | `src/components/TechStackMultiSelect.vue` | 项目详情：技术栈 **多选下拉**（`el-select` multiple + allow-create） |
 | `src/config/techStackOptions.ts` | 四类技术栈 **预设选项** + 字符串与数组互转（`parseStackItems` / `joinStackItems`） |
 | `src/config/projectSidebarNav.ts` | **项目内**侧栏分组（概览 + 各 REQ 模块；路由名与 `projectLayoutRoutes` 一致） |

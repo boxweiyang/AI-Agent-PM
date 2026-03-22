@@ -5,7 +5,11 @@
   <el-container class="project-shell" direction="horizontal">
     <div
       class="aside-skin"
-      :class="{ 'aside-skin--zero': sidebarMode === 'collapsed' }"
+      :class="{
+        'aside-skin--zero': sidebarMode === 'collapsed',
+        'aside-skin--icons': sidebarMode === 'icons',
+        'aside-skin--full': sidebarMode === 'full',
+      }"
       :style="{ width: `${asideWidthPx}px` }"
     >
       <div
@@ -36,9 +40,10 @@
                     v-for="item in group.items"
                     :key="item.routeName"
                     :index="resolvePath(item.routeName)"
+                    :title="sidebarMode === 'icons' ? item.title : undefined"
                   >
                     <el-icon><component :is="item.icon" /></el-icon>
-                    <span>{{ item.title }}</span>
+                    <span v-if="sidebarMode === 'full'">{{ item.title }}</span>
                   </el-menu-item>
                 </el-menu-item-group>
               </template>
@@ -127,9 +132,10 @@ const contextProjectTitle = computed(() => {
   return projectId.value ? `项目 ${projectId.value}` : '—'
 })
 
+/** 仅图标模式略窄于 EP 默认 64，更紧凑；与下方菜单宽度覆盖配套 */
 const asideWidthPx = computed(() => {
   if (sidebarMode.value === 'full') return 220
-  if (sidebarMode.value === 'icons') return 64
+  if (sidebarMode.value === 'icons') return 52
   return 0
 })
 
@@ -282,38 +288,157 @@ async function onLogout() {
   background: transparent;
 }
 
-/* 跨左右区分割线的「腰钮」：一半压在侧栏、一半压在主区 */
+/*
+ * 仅图标模式：`el-menu-item-group` 的分组标题仍会占位显示文案，需强制隐藏；
+ * 子项文案已由 `v-if="sidebarMode === 'full'"` 去掉，保留图标 + 原生 title 提示。
+ */
+.aside-panel--icons .project-menu:deep(.el-menu-item-group__title) {
+  display: none !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  line-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* 折叠菜单：整行与触发器均水平居中，去掉 EP 为文字预留的左右不对称 padding */
+.aside-panel--icons .project-menu:deep(.el-menu.el-menu--collapse) {
+  width: 52px !important;
+}
+
+.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item) {
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item .el-menu-tooltip__trigger) {
+  display: flex !important;
+  width: 100% !important;
+  min-height: 56px;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item .el-icon) {
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+}
+
+.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item .el-icon svg) {
+  display: block;
+}
+
+/* 腰钮：左缘与侧栏右缘对齐（不压菜单），仅纵向居中；无左边框，与菜单右边框共用一条分界 */
 .aside-rail-toggle {
   position: absolute;
   left: 100%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
   z-index: 25;
-  width: 18px;
-  height: 44px;
+  width: 16px;
+  height: 48px;
   padding: 0;
   margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
   border: 1px solid var(--el-border-color);
+  border-left: none;
   border-radius: 0 10px 10px 0;
   background: var(--el-bg-color);
   color: var(--el-text-color-secondary);
   cursor: pointer;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
   transition:
-    color 0.15s ease,
-    background 0.15s ease;
+    color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.22s ease,
+    width 0.22s ease,
+    height 0.22s ease;
+}
+
+.aside-rail-toggle {
+  box-shadow:
+    2px 0 12px rgba(0, 0, 0, 0.08),
+    0 0 22px color-mix(in srgb, var(--el-color-primary) 28%, transparent),
+    0 0 1px color-mix(in srgb, var(--el-color-primary) 38%, transparent);
 }
 
 .aside-rail-toggle:hover {
   color: var(--el-color-primary);
   background: var(--el-fill-color-light);
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.1);
+}
+
+.aside-rail-toggle:hover {
+  box-shadow:
+    2px 0 16px rgba(0, 0, 0, 0.1),
+    0 0 34px color-mix(in srgb, var(--el-color-primary) 45%, transparent),
+    0 0 2px color-mix(in srgb, var(--el-color-primary) 55%, transparent);
+}
+
+/* 全收起：腰钮略加宽；悬停向右弹性位移（cubic-bezier 略过冲模拟弹动） */
+.aside-skin--zero .aside-rail-toggle {
+  width: 26px;
+  height: 54px;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 2px 0 14px rgba(0, 0, 0, 0.1);
+  transform: translateY(-50%);
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.22s ease,
+    width 0.22s ease,
+    height 0.22s ease,
+    transform 0.48s cubic-bezier(0.22, 1.55, 0.38, 1);
+}
+
+.aside-skin--zero .aside-rail-toggle {
+  box-shadow:
+    2px 0 14px rgba(0, 0, 0, 0.1),
+    0 0 30px color-mix(in srgb, var(--el-color-primary) 36%, transparent),
+    0 0 2px color-mix(in srgb, var(--el-color-primary) 45%, transparent);
+}
+
+.aside-skin--zero .aside-rail-toggle:hover {
+  box-shadow: 2px 0 18px rgba(0, 0, 0, 0.12);
+}
+
+.aside-skin--zero .aside-rail-toggle:hover {
+  box-shadow:
+    2px 0 18px rgba(0, 0, 0, 0.12),
+    0 0 44px color-mix(in srgb, var(--el-color-primary) 52%, transparent),
+    0 0 3px color-mix(in srgb, var(--el-color-primary) 60%, transparent);
+  transform: translateY(-50%) translateX(12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aside-skin--zero .aside-rail-toggle {
+    transition:
+      color 0.18s ease,
+      background 0.18s ease,
+      box-shadow 0.22s ease,
+      width 0.22s ease,
+      height 0.22s ease;
+  }
+
+  .aside-skin--zero .aside-rail-toggle:hover {
+    transform: translateY(-50%);
+  }
 }
 
 .rail-toggle-icon {
-  font-size: 14px;
+  font-size: 15px;
+  transition: font-size 0.22s ease;
+}
+
+.aside-skin--zero .rail-toggle-icon {
+  font-size: 19px;
 }
 
 .project-right {

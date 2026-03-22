@@ -15,7 +15,18 @@
         <span class="ctx-sep" aria-hidden="true">-</span>
         <span class="ctx-page">{{ contextPageTitle }}</span>
       </div>
-      <span v-else-if="showLeftTitle && title.trim()" class="crumb">{{ title }}</span>
+      <div
+        v-else-if="showLeftTitle && (title.trim() || showSettingsProjectListBack)"
+        class="workbench-header-left"
+      >
+        <span v-if="title.trim()" class="crumb">{{ title }}</span>
+        <template v-if="showSettingsProjectListBack">
+          <span v-if="title.trim()" class="wb-sep" aria-hidden="true">·</span>
+          <el-button class="wb-back-list" type="primary" link @click="goProjectList">
+            回到项目列表
+          </el-button>
+        </template>
+      </div>
     </div>
     <div class="app-header-right">
       <el-dropdown trigger="click" @command="onFeatureCommand">
@@ -51,7 +62,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowDown, Switch } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import ThemeSegmented from '@/components/ThemeSegmented.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -79,10 +90,21 @@ const emit = defineEmits<{
   switchProject: []
 }>()
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
 const hasProjectContext = computed(() => Boolean(props.contextProjectName?.trim()))
+
+/** 功能 → AI/个人/系统设置 等页：顶栏补充「回到项目列表」 */
+const showSettingsProjectListBack = computed(() => {
+  const n = route.name
+  return n === 'settings-ai' || n === 'settings-profile' || n === 'settings-system'
+})
+
+function goProjectList() {
+  void router.push({ name: 'workspace-projects' })
+}
 
 function onFeatureCommand(cmd: string) {
   if (cmd === 'ai') void router.push({ name: 'settings-ai' })
@@ -111,6 +133,24 @@ function onFeatureCommand(cmd: string) {
   flex: 1;
   display: flex;
   align-items: center;
+}
+
+.workbench-header-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.wb-sep {
+  color: var(--el-text-color-placeholder);
+  user-select: none;
+}
+
+.wb-back-list {
+  flex-shrink: 0;
+  padding: 0 !important;
 }
 
 .header-project-ctx {
