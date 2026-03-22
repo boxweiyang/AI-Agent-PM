@@ -44,7 +44,8 @@
 | `/` | 工作台 | `MainLayout` + `workspace/pages/Home.vue` | REQ-M09 §4 |
 | `/projects` | 项目管理 | 同上（`route.name === workspace-projects`） | REQ-M09 §3～§4 |
 | `/projects/last` | 项目详情 | `MainLayout` + `workspace/pages/ProjectLastHub.vue` | REQ-M09、M01 |
-| `/projects/:projectId` | 项目详情 | `MainLayout` + `workspace/pages/ProjectDetail.vue` | M01、M08 占位 |
+| `/projects/:projectId` | 项目详情 | `MainLayout` + `ProjectShell` → `ProjectDetail.vue` | M01、可编辑、模块入口 |
+| `/projects/:projectId/m02/requirements` 等 | 各模块占位 | `ProjectShell` → `ProjectModulePlaceholder.vue` | 对应 REQ-M02～M11；`artifacts` 驱动已生成/去生成 |
 
 ---
 
@@ -75,10 +76,19 @@
 - **分组顺序**：`进行中` → `立项流程中` → `暂停` → `已结项` → 其余状态字典序（见 `projectPresentation.ts`）。
 - **区别**：`/` 与 `/projects` 共用 `Home.vue`（`route.name` 区分），仅标题与说明文案不同。
 
-## 6.1 `/projects/:projectId` 项目详情（V1 骨架）
+## 6.1 `/projects/:projectId` 项目详情
 
-- **数据**：`GET /api/v1/projects/{projectId}`，展示名称、状态、描述、id、最近更新；后续可替换为 M08 Dashboard 布局。
+- **数据**：`GET /api/v1/projects/{projectId}`，展示契约 **`ProjectSummary` 全量字段**（含 **`artifacts`** 模块资产标记），分区对齐 **REQ-M01 §3.1（立项必填）**、**§3.2（可选）**，并含 **执行与度量**（只读汇总）。未填写项统一显示「未填写」。
+- **编辑**：**编辑 / 保存 / 取消**；保存走 **`PATCH /api/v1/projects/{projectId}`**（`ProjectPatchRequest`）；度量字段不在此表单修改。
+- **项目空间与文档**：卡片网格列出 **REQ-M02～M11** 等入口（配置见 `projectRelatedModules.ts`），**路由名为子路径**；**已生成** / **未生成** 由 `artifacts` 决定；按钮进入子页。
+- **技术负责人**：未填时顶部 **非阻塞** `el-alert`（与 M01 §3.3 一致）。
 - **失败**：业务错误或不存在时展示空态并可回列表。
+
+## 6.1.1 项目内模块占位页
+
+- **路径**：`/projects/:projectId/<模块路径>`（如 `m02/requirements`）。
+- **已生成**（`artifacts[键]===true`）：成功态说明，后续可替换为真实工作台。
+- **未生成**：**一键生成（演示）** 调用 **PATCH** 合并 `artifacts`，再可进入已生成态；**返回项目详情** 回到概览。
 
 ## 6.2 `/projects/last` 项目详情入口
 
@@ -96,6 +106,8 @@
 | 2026-03-22 | 工作台：移除开发联调区；按状态 `el-collapse`、一行两卡片、细条进度、预计完成日+剩余/逾期；`ProjectSummary` 扩展（OpenAPI v0.2.2）。 |
 | 2026-03-22 | 主壳：站级侧栏改为 **模块子菜单** + 图标；未实现页 **待开发** 标签；`@element-plus/icons-vue` 显式依赖；配置 `siteNavMenu.ts`。 |
 | 2026-03-22 | M01 雏形：**新建项目** 弹窗 + `POST/GET` 项目契约（OpenAPI v0.2.4）；`ProjectDetail` / `ProjectLastHub`；侧栏 **项目详情**；MSW 内存列表可追加新项目。 |
+| 2026-03-22 | 项目详情：契约 **v0.2.5** 扩展 M01 字段；详情页分区展示 + 技术负责人提示；`projectDetailDisplay.ts`；Mock 种子数据补全示例。 |
+| 2026-03-22 | 项目详情 **可编辑**（PATCH）；**artifacts** + 模块子路由占位；`ProjectShell` / `projectRelatedModules.ts` / `ProjectModulePlaceholder`；OpenAPI **v0.2.6**。 |
 
 ---
 

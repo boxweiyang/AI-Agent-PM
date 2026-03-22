@@ -114,7 +114,9 @@ const navDefaultOpeneds = computed(() => siteNavSubgroupIds(visibleNavGroups.val
 const activeMenuPath = computed(() => {
   const p = route.path
   if (p === '/' || p === '') return '/'
-  if (route.name === 'project-detail' || route.name === 'project-last-hub') return '/projects/last'
+  if (route.name === 'project-last-hub') return '/projects/last'
+  const pid = route.params.projectId
+  if (typeof pid === 'string' && pid.length > 0) return '/projects/last'
   if (p === '/projects') return '/projects'
   return p
 })

@@ -5,7 +5,7 @@ info:
     前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
 
     **鉴权（V1）**：账号密码登录；Access JWT（Bearer）；Refresh 见 TECH-004（实现可选 Cookie HttpOnly；契约中 Body 字段保留作备选）。
-  version: 0.2.4-draft
+  version: 0.2.6-draft
 
 servers:
   - url: http://127.0.0.1:8000
@@ -196,6 +196,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
+    patch:
+      tags: [project]
+      summary: 更新项目（部分字段）
+      description: |
+        仅更新请求体中出现的字段；`artifacts` 与已有对象 **浅合并**（便于「生成」各模块资产标记）。
+        度量类字段（如 `progress_percent`）可由服务端禁止写入或仅管理员可写，实现自定。
+      operationId: patchProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectPatchRequest"
+      responses:
+        "200":
+          description: 成功，返回更新后的 `ProjectSummary`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeProjectOne"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
 
   /api/v1/ai/invoke:
     post:
@@ -339,7 +373,61 @@ components:
           example: 进行中
         description:
           type: string
-          description: 卡片副文案（可选）
+          description: 列表/卡片副文案（可选）；可与 `introduction` 并存，详情页优先展示 `introduction`
+        introduction:
+          type: string
+          description: REQ-M01 项目简介（立项必填；可与 description 同步由前端约定）
+        background:
+          type: string
+          description: REQ-M01 项目背景（立项必填）
+        planned_start_at:
+          type: string
+          format: date-time
+          description: REQ-M01 计划开始时间（立项必填，按日解读）
+        technical_lead_name:
+          type: string
+          description: REQ-M01 技术负责人（可选；未选时前端可展示非阻塞提示）
+        headcount_frontend:
+          type: integer
+          minimum: 0
+          description: 预计前端人力（可选）
+        headcount_backend:
+          type: integer
+          minimum: 0
+          description: 预计后端人力（可选）
+        headcount_qa:
+          type: integer
+          minimum: 0
+          description: 预计测试人力（可选）
+        stack_frontend:
+          type: string
+          description: 技术栈-前端（可选）
+        stack_backend:
+          type: string
+          description: 技术栈-后端（可选）
+        stack_database:
+          type: string
+          description: 技术栈-数据库（可选）
+        stack_middleware:
+          type: string
+          description: 技术栈-中间件（可选）
+        goals:
+          type: array
+          description: REQ-M01 项目目标（1～3 条，可选）
+          items:
+            type: string
+        scope_in:
+          type: string
+          description: 项目范围-做什么（可选）
+        scope_out:
+          type: string
+          description: 项目范围-不做什么（可选）
+        risk_notes:
+          type: string
+          description: 风险备注（可选）
+        manpower_stack_deferred:
+          type: boolean
+          description: true 表示「预计人力/技术栈后续由技术负责人补全」（REQ-M01 §3.3）
         updated_at:
           type: string
           format: date-time
@@ -373,6 +461,75 @@ components:
           type: string
           format: date-time
           description: 计划/预计完成日（按日解读；ISO8601，前端展示日期与剩余天数）
+        artifacts:
+          type: object
+          description: |
+            各模块资产是否已生成。键约定：`req_doc`、`tech_design`、`api_catalog`、`db_schema`、
+            `iteration_board`、`task_board`、`resource_plan`、`change_requests`、`test_harness`、
+            `dashboard_board`、`closure_pack`、`ai_workspace` 等；值为 true 表示已生成可进入工作台。
+          additionalProperties:
+            type: boolean
+
+    ProjectPatchRequest:
+      type: object
+      description: 所有字段可选；未出现的不修改。`artifacts` 仅合并出现的键。
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        status:
+          type: string
+        description:
+          type: string
+          maxLength: 2000
+        introduction:
+          type: string
+          maxLength: 4000
+        background:
+          type: string
+          maxLength: 4000
+        planned_start_at:
+          type: string
+          format: date-time
+        planned_end_at:
+          type: string
+          format: date-time
+        technical_lead_name:
+          type: string
+        headcount_frontend:
+          type: integer
+          minimum: 0
+        headcount_backend:
+          type: integer
+          minimum: 0
+        headcount_qa:
+          type: integer
+          minimum: 0
+        stack_frontend:
+          type: string
+        stack_backend:
+          type: string
+        stack_database:
+          type: string
+        stack_middleware:
+          type: string
+        goals:
+          type: array
+          items:
+            type: string
+        scope_in:
+          type: string
+        scope_out:
+          type: string
+        risk_notes:
+          type: string
+        manpower_stack_deferred:
+          type: boolean
+        artifacts:
+          type: object
+          additionalProperties:
+            type: boolean
 
     ProjectCreateRequest:
       type: object
@@ -385,12 +542,57 @@ components:
           maxLength: 200
         description:
           type: string
-          description: 项目描述（可选）
+          description: 列表副文案/简介草稿（可选）；服务端可写入 `description` 或 `introduction`
           maxLength: 2000
         status:
           type: string
           description: 初始状态；缺省由服务端定为「立项流程中」或与 M01 枚举一致
           example: 立项流程中
+        background:
+          type: string
+          description: REQ-M01 项目背景
+          maxLength: 4000
+        introduction:
+          type: string
+          description: REQ-M01 项目简介
+          maxLength: 4000
+        planned_start_at:
+          type: string
+          format: date-time
+        planned_end_at:
+          type: string
+          format: date-time
+        technical_lead_name:
+          type: string
+        headcount_frontend:
+          type: integer
+          minimum: 0
+        headcount_backend:
+          type: integer
+          minimum: 0
+        headcount_qa:
+          type: integer
+          minimum: 0
+        stack_frontend:
+          type: string
+        stack_backend:
+          type: string
+        stack_database:
+          type: string
+        stack_middleware:
+          type: string
+        goals:
+          type: array
+          items:
+            type: string
+        scope_in:
+          type: string
+        scope_out:
+          type: string
+        risk_notes:
+          type: string
+        manpower_stack_deferred:
+          type: boolean
 
     EnvelopeHealth:
       allOf:

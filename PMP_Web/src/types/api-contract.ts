@@ -48,6 +48,27 @@ export type ProjectSummary = {
   name: string
   status: string
   description?: string
+  /** REQ-M01 项目简介 */
+  introduction?: string
+  /** REQ-M01 项目背景 */
+  background?: string
+  /** REQ-M01 计划开始（ISO8601） */
+  planned_start_at?: string
+  /** REQ-M01 技术负责人 */
+  technical_lead_name?: string
+  headcount_frontend?: number
+  headcount_backend?: number
+  headcount_qa?: number
+  stack_frontend?: string
+  stack_backend?: string
+  stack_database?: string
+  stack_middleware?: string
+  goals?: string[]
+  scope_in?: string
+  scope_out?: string
+  risk_notes?: string
+  /** 人力与技术栈是否标记为后续补全（REQ-M01 §3.3） */
+  manpower_stack_deferred?: boolean
   updated_at?: string
   /** 0–100 */
   progress_percent?: number
@@ -59,6 +80,8 @@ export type ProjectSummary = {
   bug_open_count?: number
   /** 预计完成时间（ISO8601） */
   planned_end_at?: string
+  /** 各模块资产是否已生成（键如 req_doc、tech_design，见 OpenAPI 说明） */
+  artifacts?: Record<string, boolean>
 }
 
 export type ProjectListData = {
@@ -71,6 +94,48 @@ export type ProjectCreateRequestBody = {
   description?: string
   /** 缺省由服务端定为「立项流程中」 */
   status?: string
+  background?: string
+  introduction?: string
+  planned_start_at?: string
+  planned_end_at?: string
+  technical_lead_name?: string
+  headcount_frontend?: number
+  headcount_backend?: number
+  headcount_qa?: number
+  stack_frontend?: string
+  stack_backend?: string
+  stack_database?: string
+  stack_middleware?: string
+  goals?: string[]
+  scope_in?: string
+  scope_out?: string
+  risk_notes?: string
+  manpower_stack_deferred?: boolean
+}
+
+/** PATCH /api/v1/projects/{projectId}（契约 ProjectPatchRequest） */
+export type ProjectPatchRequestBody = {
+  name?: string
+  status?: string
+  description?: string
+  introduction?: string
+  background?: string
+  planned_start_at?: string
+  planned_end_at?: string
+  technical_lead_name?: string
+  headcount_frontend?: number
+  headcount_backend?: number
+  headcount_qa?: number
+  stack_frontend?: string
+  stack_backend?: string
+  stack_database?: string
+  stack_middleware?: string
+  goals?: string[]
+  scope_in?: string
+  scope_out?: string
+  risk_notes?: string
+  manpower_stack_deferred?: boolean
+  artifacts?: Record<string, boolean>
 }
 
 /** POST /api/v1/projects、GET /api/v1/projects/{id} 成功载荷 */

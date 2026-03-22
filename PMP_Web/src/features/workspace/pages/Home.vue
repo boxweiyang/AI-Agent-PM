@@ -72,7 +72,7 @@
                   Story <strong>{{ fmtNum(p.story_count) }}</strong>
                 </span>
                 <span class="stat-dot" aria-hidden="true">·</span>
-                <span>Task 待办 <strong>{{ taskSummary(p) }}</strong></span>
+                <span>Task 待办 <strong>{{ taskOpenTotalSummary(p) }}</strong></span>
                 <span class="stat-dot" aria-hidden="true">·</span>
                 <span>Bug <strong>{{ fmtNum(p.bug_open_count) }}</strong></span>
               </div>
@@ -111,6 +111,7 @@ import {
   groupProjectsByStatus,
   plannedEndParts,
   statusTagType,
+  taskOpenTotalSummary,
 } from '@/features/workspace/projectPresentation'
 
 const route = useRoute()
@@ -159,14 +160,6 @@ function iterationLabel(p: ProjectSummary): string {
   const n = p.iteration_number
   if (n == null || n < 1) return ''
   return `第 ${n} 次迭代`
-}
-
-function taskSummary(p: ProjectSummary): string {
-  if (p.task_total_count != null) {
-    return `${p.task_open_count ?? 0}/${p.task_total_count}`
-  }
-  if (p.task_open_count != null) return String(p.task_open_count)
-  return '—'
 }
 
 function planRow(p: ProjectSummary) {

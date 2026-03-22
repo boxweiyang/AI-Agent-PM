@@ -32,12 +32,14 @@
 | `src/router/index.ts` | 路由表；`/login` 公开；`/` 套 `MainLayout`；**导航守卫**校验登录 |
 | `src/layouts/MainLayout.vue` | **REQ-M09 站级壳**：侧栏 + 顶栏 + `router-view` |
 | `src/config/siteNavMenu.ts` | 站级侧栏 **模块菜单**（主菜单图标 + 子项；与 REQ-MASTER 对齐；未实现项 disabled +「待开发」） |
+| `src/config/projectRelatedModules.ts` | **项目内**模块路由清单（与 `artifacts` 键对齐；由 `workspace/routes.ts` 注册子路由） |
 | `src/features/auth/pages/Login.vue` | 登录页（Mock：`admin` / 任意密码） |
 | `src/features/workspace/` | 工作台：`routes.ts` 挂载 `/`、`/projects`、`/projects/last`、`/projects/:id`；`pages/Home.vue`；`components/ProjectCreateDialog.vue` |
 | `src/features/workspace/pages/ProjectDetail.vue` | 项目详情（GET 单项目；M08 前占位） |
 | `src/features/workspace/pages/ProjectLastHub.vue` | 侧栏「项目详情」：`/projects/last` 重定向或空态 |
 | `src/api/last-project.ts` | `sessionStorage` 记录最近访问项目 id（侧栏与创建后跳转） |
-| `src/features/workspace/projectPresentation.ts` | 状态分组顺序、Tag 颜色映射、预计完成日与剩余天数文案 |
+| `src/features/workspace/projectPresentation.ts` | 状态分组顺序、Tag 颜色映射、预计完成日与剩余天数文案、Task 待办摘要 |
+| `src/features/workspace/projectDetailDisplay.ts` | 项目详情页：M01 字段空态与日期/简介等展示辅助 |
 | `src/features/*/routes.ts` | 其它域已建 **空路由数组** 占位，开发时在此 export 并在 `router/index.ts` 合并 |
 | `src/core/permissions.ts` | 权限编码常量与 **后续** 细粒度菜单过滤（当前按 `adminOnly` 等在 `siteNavMenu` 过滤） |
 | `src/mocks/handlers.ts` | MSW：与 **contracts** 同步的 mock 实现（health、auth、projects、ai echo） |

@@ -10,6 +10,21 @@ export const PROJECT_STATUS_ORDER = ['进行中', '立项流程中', '暂停', '
 /** 新建项目可选初始状态（与分组顺序一致，默认「立项流程中」） */
 export const CREATE_PROJECT_STATUS_OPTIONS = [...PROJECT_STATUS_ORDER] as string[]
 
+/** M01 主状态流（§6）与站级列表状态合并，供详情编辑下拉 */
+const M01_LIFECYCLE_STATUSES = [
+  '立项中',
+  '需求完善中',
+  '迭代规划中',
+  '执行中',
+  '测试验收中',
+  '收尾复盘中',
+  '已归档',
+] as const
+
+export const PROJECT_EDIT_STATUS_OPTIONS = [
+  ...new Set<string>([...PROJECT_STATUS_ORDER, ...M01_LIFECYCLE_STATUSES]),
+]
+
 export type ElTagType = 'success' | 'warning' | 'info' | 'danger' | 'primary'
 
 /** 状态 → Element Plus Tag 类型（浅色/深色主题下均由 EP 变量控制对比度） */
@@ -78,4 +93,13 @@ export function clampProgress(p: ProjectSummary): number {
   const n = p.progress_percent
   if (n == null || Number.isNaN(n)) return 0
   return Math.min(100, Math.max(0, Math.round(n)))
+}
+
+/** Task 待办展示：open/total 或单 open */
+export function taskOpenTotalSummary(p: ProjectSummary): string {
+  if (p.task_total_count != null) {
+    return `${p.task_open_count ?? 0}/${p.task_total_count}`
+  }
+  if (p.task_open_count != null) return String(p.task_open_count)
+  return '—'
 }
