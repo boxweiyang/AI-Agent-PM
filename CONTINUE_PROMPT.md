@@ -25,8 +25,8 @@
 
 3. ~~**补全 TECH-001 待定项**~~（**已完成**：**TECH-001 v0.3 §9** 已封板栈、DB、JWT、API、`{code,message,data}`、**V1 以同步 JSON 为主 / SSE 后置**、本地编排；细则见 **TECH-002～005**）
 
-4. **落地脚手架**  
-   - 在仓库根初始化 **pnpm workspace**（或选定方案），生成 **`apps/web` / `apps/api` / `apps/ai-service`** 可运行最小示例 + **服务间 ping**。
+4. ~~**落地脚手架**~~（**已完成**）  
+   - 根目录 **`PMP_Web` / `PMP_Service` / `PMP_AI_Agent`**：目录 + **README** + **`docs/STRUCTURE.md`** + **最小可运行**（`echo` Agent、`/api/v1/health` + `/api/v1/ai/invoke`、Web 首页联调）。详见根 **`README.md`**。
 
 **工作方式**
 
