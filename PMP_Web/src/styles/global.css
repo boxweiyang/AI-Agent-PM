@@ -5,6 +5,18 @@ body,
   margin: 0;
 }
 
+/**
+ * 主壳内仅内容区滚动：避免整页滚动带动顶栏、侧栏。
+ * 登录页在 `.login-page` 上自行 `overflow-y: auto`。
+ */
+#app {
+  overflow: hidden;
+}
+
+.app-viewport {
+  height: 100%;
+}
+
 body {
   font-family:
     system-ui,
@@ -16,4 +28,23 @@ body {
     sans-serif;
   background: var(--el-bg-color);
   color: var(--el-text-color-primary);
+}
+
+/**
+ * 浅色模式：避免默认接近 #fff 的底色刺眼，改为轻微冷灰层次（仍满足对比度）。
+ * 深色模式沿用 Element Plus dark/css-vars，不在此覆盖。
+ */
+:root:not(.dark) {
+  --el-bg-color-page: #eceff3;
+  --el-bg-color: #f2f4f7;
+  --el-fill-color-blank: #f7f8fa;
+  --el-menu-bg-color: #f2f4f7;
+}
+
+/* 登录页浅色：渐变更淡，底接 page 灰（不依赖 color-mix，兼容面更广） */
+html:not(.dark) .login-page {
+  background:
+    radial-gradient(1000px 520px at 18% 0%, var(--el-color-primary-light-9), transparent 62%),
+    radial-gradient(800px 480px at 96% 28%, var(--el-fill-color-light), transparent 55%),
+    var(--el-bg-color-page);
 }

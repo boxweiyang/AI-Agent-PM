@@ -3,7 +3,9 @@ info:
   title: PMP Service API
   description: |
     前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
-  version: 0.1.0-draft
+
+    **鉴权（V1）**：账号密码登录；Access JWT（Bearer）；Refresh 见 TECH-004（实现可选 Cookie HttpOnly；契约中 Body 字段保留作备选）。
+  version: 0.2.4-draft
 
 servers:
   - url: http://127.0.0.1:8000
@@ -12,6 +14,10 @@ servers:
 tags:
   - name: system
     description: 健康检查等
+  - name: auth
+    description: 登录、Refresh、当前用户（对齐 TECH-004 / REQ-M09）
+  - name: project
+    description: 项目列表与立项入口（M01/M09）
   - name: ai
     description: AI 网关（经 ai_gateway；Agent 能力键 capability）
 
@@ -28,6 +34,168 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeHealth"
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: 账号密码登录
+      description: |
+        成功返回 Access + Refresh 及当前用户摘要。实现侧需遵守 TECH-004：**每用户仅一条有效 Refresh**（新登录轮换并作废旧 Refresh）。
+      operationId: postAuthLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAuthLogin"
+        "401":
+          description: 用户名或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: 使用 Refresh 换取新的 Access（及轮换 Refresh）
+      description: |
+        TECH-004：**滑动续期**、一人一 Refresh。实现推荐 Refresh 走 HttpOnly Cookie；若用 Body，则使用下述 `refresh_token` 字段。
+      operationId: postAuthRefresh
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAuthRefresh"
+        "401":
+          description: Refresh 无效或已吊销
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: 当前登录用户（权限摘要）
+      description: 供前端恢复会话、渲染菜单（`is_system_admin` 短路全权限，见 TECH-004）。
+      operationId: getAuthMe
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeUserMe"
+        "401":
+          description: 未登录或 Access 过期
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects:
+    get:
+      tags: [project]
+      summary: 项目列表（工作台/项目管理）
+      description: |
+        返回当前用户可见项目摘要（REQ-M09：管理员见全部，普通成员见参与项目；过滤规则在 Service 实现）。
+      operationId: listProjects
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选：按名称关键词筛选（实现可选）
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeProjectList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    post:
+      tags: [project]
+      summary: 新建项目（M01 最小集）
+      description: |
+        创建项目并返回摘要；前端成功后可跳转 `GET /api/v1/projects/{projectId}` 或列表刷新。
+        权限与 REQ-M01/REQ-M09「新建项目」一致（无权限时返回业务错误码）。
+      operationId: createProject
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectCreateRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeProjectOne"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}:
+    get:
+      tags: [project]
+      summary: 项目详情（摘要）
+      description: 按 id 返回与列表项一致的 `ProjectSummary`；无权限或不存在时业务错误（实现可 404 HTTP + 包络）。
+      operationId: getProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeProjectOne"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
 
   /api/v1/ai/invoke:
     post:
@@ -55,6 +223,13 @@ paths:
                 $ref: "#/components/schemas/EnvelopeError"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access Token（`Authorization: Bearer <access>`）
+
   schemas:
     EnvelopeBase:
       type: object
@@ -62,12 +237,160 @@ components:
       properties:
         code:
           type: integer
-          description: 业务成功为 0
+          description: 业务成功为 0；非 0 表示失败（与 TECH-002 拦截器约定一致）
         message:
           type: string
         data:
           nullable: true
           description: 业务载荷；成功时按接口而定
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          format: password
+          example: "******"
+        remember_7d:
+          type: boolean
+          default: false
+          description: |
+            用户勾选「7 天内保持登录」时为 true。对齐 TECH-004：服务端可据此与 Refresh **7 天滑动续期**策略一致（如延长 Cookie、或仅 session 级令牌）。
+
+    RefreshRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: 当 Refresh 未使用 Cookie 时必填
+
+    AuthTokenPair:
+      type: object
+      required: [access_token, refresh_token, expires_in, token_type]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          description: Access 有效期（秒）；实现阶段可调
+          example: 3600
+        token_type:
+          type: string
+          example: Bearer
+
+    UserMe:
+      type: object
+      required: [id, username, display_name, is_system_admin, permission_codes]
+      properties:
+        id:
+          type: string
+          description: 用户主键（UUID 或雪花，由实现定）
+        username:
+          type: string
+        display_name:
+          type: string
+        is_system_admin:
+          type: boolean
+          description: 为 true 时拥有全部权限（TECH-004）
+        permission_codes:
+          type: array
+          items:
+            type: string
+          description: 有效权限编码并集；管理员可为空数组由后端忽略
+        is_mock_profile:
+          type: boolean
+          description: 为 true 时前端可展示「Mock」等演示标识；生产环境应为 false 或省略
+
+    AuthLoginData:
+      allOf:
+        - $ref: "#/components/schemas/AuthTokenPair"
+        - type: object
+          required: [user]
+          properties:
+            user:
+              $ref: "#/components/schemas/UserMe"
+
+    AuthRefreshData:
+      allOf:
+        - $ref: "#/components/schemas/AuthTokenPair"
+        - type: object
+          required: [user]
+          properties:
+            user:
+              $ref: "#/components/schemas/UserMe"
+
+    ProjectSummary:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          description: 与 REQ-M01 项目状态枚举对齐；工作台按此字段分组折叠展示
+          example: 进行中
+        description:
+          type: string
+          description: 卡片副文案（可选）
+        updated_at:
+          type: string
+          format: date-time
+          description: 最近更新时间（可选，ISO8601）
+        progress_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 综合完成度 0–100（实现口径可与 M03/M04 对齐，V1 可手工或规则计算）
+        iteration_number:
+          type: integer
+          minimum: 1
+          description: 当前第几次迭代（从 1 起；可选，工作台卡片在 Story 前展示「第 N 次迭代」）
+        story_count:
+          type: integer
+          minimum: 0
+          description: Story 数量（可选）
+        task_open_count:
+          type: integer
+          minimum: 0
+          description: 未完成 Task 数（可选）
+        task_total_count:
+          type: integer
+          minimum: 0
+          description: Task 总数（可选；与 task_open_count 组合展示「待办 a/b」）
+        bug_open_count:
+          type: integer
+          minimum: 0
+          description: 未关闭缺陷数（M07，可选）
+        planned_end_at:
+          type: string
+          format: date-time
+          description: 计划/预计完成日（按日解读；ISO8601，前端展示日期与剩余天数）
+
+    ProjectCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: 项目名称
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          description: 项目描述（可选）
+          maxLength: 2000
+        status:
+          type: string
+          description: 初始状态；缺省由服务端定为「立项流程中」或与 M01 枚举一致
+          example: 立项流程中
 
     EnvelopeHealth:
       allOf:
@@ -80,6 +403,52 @@ components:
                 status:
                   type: string
                   example: up
+
+    EnvelopeAuthLogin:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/AuthLoginData"
+
+    EnvelopeAuthRefresh:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/AuthRefreshData"
+
+    EnvelopeUserMe:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/UserMe"
+
+    EnvelopeProjectList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ProjectSummary"
+
+    EnvelopeProjectOne:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ProjectSummary"
 
     AiInvokeRequest:
       type: object

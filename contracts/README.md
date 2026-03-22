@@ -11,6 +11,8 @@
 | **前端** | Mock（**MSW**，见 `PMP_Web/src/mocks/`）、**openapi-typescript** 等，路径指向 **`contracts/openapi/`**（见 `PMP_Web/docs/STRUCTURE.md`）。 |
 | **响应包络** | 与 **TECH-004** 一致：`{ "code", "message", "data" }`；业务成功 **`code === 0`**。 |
 
+**最近更新（草案 v0.2+）**：已补充 **`/api/v1/auth/*`**（login / refresh / me）与 **`GET /api/v1/projects`**；**v0.2.1**：`LoginRequest.remember_7d`、`UserMe.is_mock_profile`；**v0.2.2**：`ProjectSummary` 增加进度、Story/Task、Bug、预计完成日等工作台卡片字段；**v0.2.3**：`ProjectSummary.iteration_number`（第几次迭代，Story 前展示）；**v0.2.4**：`POST /api/v1/projects`、`GET /api/v1/projects/{projectId}`、`ProjectCreateRequest`（M01 新建与详情）。
+
 ## 目录
 
 ```

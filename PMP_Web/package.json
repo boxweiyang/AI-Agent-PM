@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0 <23.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "dev:mock": "cross-env VITE_USE_MSW=true vite",
@@ -12,6 +16,7 @@
     "codegen-api": "echo \"TODO: 将 PMP_Service/openapi.json 拷到本目录后执行 openapi-typescript\""
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
     "axios": "^1.7.7",
     "element-plus": "^2.8.4",
     "pinia": "^2.2.2",
