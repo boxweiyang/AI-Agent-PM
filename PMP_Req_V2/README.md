@@ -27,6 +27,7 @@
 与本文档配套的 **可运行最小工程** 位于仓库根目录：
 
 - **`PMP_Web/`** · **`PMP_Service/`** · **`PMP_AI_Agent/`**（说明见各目录 `README.md` 与 `docs/STRUCTURE.md`）
+- **前后端共用 API 契约**：仓库根 **`contracts/`**（OpenAPI 草案）
 
 ## 工作方式
 

@@ -27,3 +27,23 @@
 
 - `.env.example`：默认走 **同源 `/api`** + Vite **proxy**。
 - 直连后端时设置 `VITE_API_BASE`（见 `src/api/client.ts`）。
+
+## API 契约（与后端共用）
+
+- **权威草案路径**（相对仓库根）：**`contracts/openapi/openapi.yaml`**
+- 从 Web 目录引用：`../../contracts/openapi/openapi.yaml`
+- **Mock / openapi-typescript**：建议以上述 YAML（或 Service 导出的 `openapi-from-service.json`）为输入；详见 **`contracts/README.md`**。
+
+## MSW（浏览器 Mock）
+
+| 路径 | 作用 |
+|------|------|
+| `src/mocks/handlers.ts` | 与 OpenAPI 对齐的 `http.get/post/...` |
+| `src/mocks/browser.ts` | `setupWorker` |
+| `src/mocks/enableMsw.ts` | `VITE_USE_MSW` 判断 |
+| `public/mockServiceWorker.js` | MSW 运行时（勿提交到 CDN 生产域名根路径以外误用） |
+| `.env.development` | `VITE_USE_MSW=true/false`（`npm run dev` 时读取） |
+
+**npm**：`dev:mock` / `dev:api` 用 **cross-env** 覆盖 `VITE_USE_MSW`，**无需改 .env**。
+
+**`main.ts`** 在挂载 Vue 前 `await worker.start({ onUnhandledRequest: 'bypass' })`，未匹配的请求仍走真实网络。

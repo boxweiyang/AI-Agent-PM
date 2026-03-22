@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "cross-env VITE_USE_MSW=true vite",
+    "dev:api": "cross-env VITE_USE_MSW=false vite",
     "build": "vite build",
     "preview": "vite preview",
     "codegen-api": "echo \"TODO: 将 PMP_Service/openapi.json 拷到本目录后执行 openapi-typescript\""
@@ -18,6 +20,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.4",
+    "cross-env": "^7.0.3",
+    "msw": "^2.7.0",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
     "vue-tsc": "^2.1.6"

@@ -35,7 +35,12 @@ uvicorn pmp_service.main:app --reload --host 0.0.0.0 --port 8000
 ```bash
 python scripts/export_openapi.py
 # 生成 PMP_Service/openapi.json
+
+python scripts/export_openapi.py --copy-contracts
+# 额外写入仓库根 contracts/openapi/openapi-from-service.json，便于与 contracts/openapi/openapi.yaml 对比合并
 ```
+
+**共用契约说明**见仓库根 **`../contracts/README.md`**。
 
 ## 测试
 

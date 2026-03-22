@@ -1,0 +1,114 @@
+openapi: 3.0.3
+info:
+  title: PMP Service API
+  description: |
+    前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
+  version: 0.1.0-draft
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: 本地 PMP_Service
+
+tags:
+  - name: system
+    description: 健康检查等
+  - name: ai
+    description: AI 网关（经 ai_gateway；Agent 能力键 capability）
+
+paths:
+  /api/v1/health:
+    get:
+      tags: [system]
+      summary: 服务健康检查
+      operationId: getHealth
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeHealth"
+
+  /api/v1/ai/invoke:
+    post:
+      tags: [ai]
+      summary: 调用 AI 能力（脚手架 echo）
+      operationId: postAiInvoke
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiInvokeRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAiInvoke"
+        "400":
+          description: 参数或未知 capability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeError"
+
+components:
+  schemas:
+    EnvelopeBase:
+      type: object
+      required: [code, message, data]
+      properties:
+        code:
+          type: integer
+          description: 业务成功为 0
+        message:
+          type: string
+        data:
+          nullable: true
+          description: 业务载荷；成功时按接口而定
+
+    EnvelopeHealth:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: up
+
+    AiInvokeRequest:
+      type: object
+      required: [capability]
+      properties:
+        capability:
+          type: string
+          description: 与 pmp_ai_agent.registry 键一致，如 echo
+          example: echo
+        payload:
+          type: object
+          additionalProperties: true
+          default: {}
+
+    EnvelopeAiInvoke:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              type: object
+              additionalProperties: true
+              description: Agent 返回体；echo 时为 echo、capability 等
+
+    EnvelopeError:
+      type: object
+      description: HTTP 4xx 时 FastAPI 可能返回 detail；联调时逐步与统一包络对齐
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: object

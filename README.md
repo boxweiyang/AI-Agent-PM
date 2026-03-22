@@ -3,6 +3,8 @@
 单仓三项目：**PMP_Web**（Vue3 SPA）、**PMP_Service**（FastAPI）、**PMP_AI_Agent**（Python 能力包，被 Service `import`）。  
 需求与实现约定见 **`PMP_Req_V2/`**（**REQ-MASTER** + **TECH-001～005** + **TECH-003** 目录结构）。
 
+**前后端共用 API 契约（含 OpenAPI 草案）**：根目录 **`contracts/`**（见 [`contracts/README.md`](./contracts/README.md)）。
+
 ## 推荐阅读顺序
 
 1. `PMP_Req_V2/REQ-MASTER_完整需求总文档.md`
