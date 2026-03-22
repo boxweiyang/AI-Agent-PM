@@ -12,8 +12,8 @@
         <p class="page-desc">
           {{
             isProjectRoute
-              ? '站级「项目管理」视图：与工作台共享数据，按状态分组浏览。'
-              : '登录后首页：项目按状态折叠展示，点击进入项目（后续接 M08 Dashboard）。'
+              ? '「项目管理」视图：与工作台共享数据，按状态分组浏览。'
+              : '登录后首页：项目按状态折叠展示；点击卡片进入该项目 Dashboard（左侧菜单仅在项目内出现）。'
           }}
         </p>
       </div>
@@ -176,12 +176,12 @@ function formatUpdated(iso: string): string {
 function onProjectCreated(p: ProjectSummary) {
   setLastProjectId(p.id)
   void loadProjects()
-  void router.push({ path: `/projects/${p.id}` })
+  void router.push({ name: 'project-dashboard', params: { projectId: p.id } })
 }
 
 function openProject(p: ProjectSummary) {
   setLastProjectId(p.id)
-  void router.push({ path: `/projects/${p.id}` })
+  void router.push({ name: 'project-dashboard', params: { projectId: p.id } })
 }
 
 onMounted(() => {

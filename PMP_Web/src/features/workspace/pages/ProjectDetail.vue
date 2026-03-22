@@ -4,28 +4,19 @@
 <template>
   <div class="project-detail">
     <el-skeleton v-if="loading" :rows="12" animated />
-    <el-empty v-else-if="notFound" description="项目不存在或无权访问">
-      <el-button type="primary" @click="goList">返回项目列表</el-button>
-    </el-empty>
+    <el-empty
+      v-else-if="notFound"
+      description="项目不存在或无权访问。可点击顶栏项目名称旁的切换图标返回项目列表。"
+    />
     <template v-else-if="project">
-      <div class="detail-head">
-        <div class="detail-titles">
-          <template v-if="!editing">
-            <h1 class="detail-name">{{ project.name }}</h1>
-            <el-tag :type="statusTagType(project.status)">{{ project.status }}</el-tag>
-          </template>
-          <h2 v-else class="detail-edit-title">编辑项目</h2>
-        </div>
-        <div class="detail-actions">
-          <template v-if="!editing">
-            <el-button type="primary" @click="startEdit">编辑</el-button>
-          </template>
-          <template v-else>
-            <el-button @click="cancelEdit">取消</el-button>
-            <el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button>
-          </template>
-          <el-button text type="primary" @click="goList">返回列表</el-button>
-        </div>
+      <div class="detail-toolbar">
+        <template v-if="!editing">
+          <el-button type="primary" @click="startEdit">编辑</el-button>
+        </template>
+        <template v-else>
+          <el-button @click="cancelEdit">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button>
+        </template>
       </div>
 
       <el-form
@@ -112,16 +103,32 @@
             </el-col>
           </el-row>
           <el-form-item label="技术栈 · 前端">
-            <el-input v-model="editForm.stack_frontend" type="textarea" :rows="2" />
+            <TechStackMultiSelect
+              v-model="editForm.stack_frontend"
+              :options="TECH_STACK_PRESETS.frontend"
+              placeholder="多选预设或输入后回车添加"
+            />
           </el-form-item>
           <el-form-item label="技术栈 · 后端">
-            <el-input v-model="editForm.stack_backend" type="textarea" :rows="2" />
+            <TechStackMultiSelect
+              v-model="editForm.stack_backend"
+              :options="TECH_STACK_PRESETS.backend"
+              placeholder="多选预设或输入后回车添加"
+            />
           </el-form-item>
           <el-form-item label="技术栈 · 数据库">
-            <el-input v-model="editForm.stack_database" type="textarea" :rows="2" />
+            <TechStackMultiSelect
+              v-model="editForm.stack_database"
+              :options="TECH_STACK_PRESETS.database"
+              placeholder="多选预设或输入后回车添加"
+            />
           </el-form-item>
           <el-form-item label="技术栈 · 中间件">
-            <el-input v-model="editForm.stack_middleware" type="textarea" :rows="2" />
+            <TechStackMultiSelect
+              v-model="editForm.stack_middleware"
+              :options="TECH_STACK_PRESETS.middleware"
+              placeholder="多选预设或输入后回车添加"
+            />
           </el-form-item>
           <el-form-item label="项目目标（每行一条，1～3 条为宜）">
             <el-input v-model="editForm.goalsText" type="textarea" :rows="4" placeholder="每行一条目标" />
@@ -231,16 +238,36 @@
             <el-descriptions-item label="预计后端人力">{{ detailNum(project.headcount_backend) }}</el-descriptions-item>
             <el-descriptions-item label="预计测试人力">{{ detailNum(project.headcount_qa) }}</el-descriptions-item>
             <el-descriptions-item label="技术栈 · 前端" :span="2">
-              {{ detailText(project.stack_frontend) }}
+              <div v-if="stackTags(project.stack_frontend).length" class="stack-tags">
+                <el-tag v-for="(t, i) in stackTags(project.stack_frontend)" :key="'sf' + i" size="small" class="stack-tag">
+                  {{ t }}
+                </el-tag>
+              </div>
+              <span v-else>{{ detailText(project.stack_frontend) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="技术栈 · 后端" :span="2">
-              {{ detailText(project.stack_backend) }}
+              <div v-if="stackTags(project.stack_backend).length" class="stack-tags">
+                <el-tag v-for="(t, i) in stackTags(project.stack_backend)" :key="'sb' + i" size="small" class="stack-tag">
+                  {{ t }}
+                </el-tag>
+              </div>
+              <span v-else>{{ detailText(project.stack_backend) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="技术栈 · 数据库" :span="2">
-              {{ detailText(project.stack_database) }}
+              <div v-if="stackTags(project.stack_database).length" class="stack-tags">
+                <el-tag v-for="(t, i) in stackTags(project.stack_database)" :key="'sd' + i" size="small" class="stack-tag">
+                  {{ t }}
+                </el-tag>
+              </div>
+              <span v-else>{{ detailText(project.stack_database) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="技术栈 · 中间件" :span="2">
-              {{ detailText(project.stack_middleware) }}
+              <div v-if="stackTags(project.stack_middleware).length" class="stack-tags">
+                <el-tag v-for="(t, i) in stackTags(project.stack_middleware)" :key="'sm' + i" size="small" class="stack-tag">
+                  {{ t }}
+                </el-tag>
+              </div>
+              <span v-else>{{ detailText(project.stack_middleware) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="项目目标" :span="2">
               <ol v-if="project.goals?.length" class="goals-list">
@@ -325,13 +352,15 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
+import TechStackMultiSelect from '@/components/TechStackMultiSelect.vue'
 import { apiClient } from '@/api/client'
 import { setLastProjectId } from '@/api/last-project'
 import { PROJECT_RELATED_MODULES } from '@/config/projectRelatedModules'
+import { parseStackItems, TECH_STACK_PRESETS } from '@/config/techStackOptions'
 import {
   editFormFromProject,
   emptyProjectEditForm,
@@ -356,7 +385,6 @@ import {
 import type { ApiEnvelope, ProjectOneData, ProjectPatchRequestBody } from '@/types/api-contract'
 
 const route = useRoute()
-const router = useRouter()
 
 const loading = ref(true)
 const notFound = ref(false)
@@ -398,8 +426,8 @@ function planLine(p: ProjectOneData): string {
   return `${parts.dateLabel}（${parts.daysLine}）`
 }
 
-function goList() {
-  void router.push({ path: '/projects' })
+function stackTags(raw?: string) {
+  return parseStackItems(raw)
 }
 
 function startEdit() {
@@ -471,39 +499,13 @@ watch(
   padding: 0 8px 24px;
 }
 
-.detail-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.detail-titles {
-  flex: 1;
-  min-width: 0;
-}
-
-.detail-name {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.detail-edit-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.detail-actions {
+.detail-toolbar {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
+  margin-bottom: 12px;
 }
 
 .detail-edit-form {
@@ -623,6 +625,16 @@ watch(
 
 .module-btn {
   width: 100%;
+}
+
+.stack-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stack-tag {
+  margin: 0;
 }
 
 .detail-footnote {

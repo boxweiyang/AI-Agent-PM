@@ -3,7 +3,8 @@
  *
  * **产品**：REQ-M09（路由 meta、菜单过滤）、TECH-004（`permission_codes`、系统管理员短路）。
  *
- * **当前阶段**：Mock 固定管理员，菜单在 `MainLayout.vue` 内联渲染。
+ * **当前阶段**：Mock 固定管理员；**项目内**菜单由 `ProjectLayout` + `projectSidebarNav.ts` 渲染；
+ * **顶栏**「功能」下拉与 `meta.requiresSystemAdmin` 守卫配合。
  * **后续**：在此集中定义 `NavItem[]`、根据 `useAuthStore().user` 过滤可见项，
  * 并与后端返回的 `permission_codes` 对齐（禁止仅依赖前端隐藏，后端仍需鉴权）。
  */

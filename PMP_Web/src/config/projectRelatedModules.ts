@@ -1,7 +1,7 @@
 /**
  * 项目内关联模块入口（与 REQ-MASTER M02～M11 对齐）。
  * - `artifactKey` 对应契约 `ProjectSummary.artifacts` 布尔键；Mock 可 PATCH 合并。
- * - 路由挂在 `projects/:projectId/` 下，由 `workspace/routes.ts` 展开注册。
+ * - 路由挂在 `/projects/:projectId/` 下，由 `projectLayoutRoutes.ts` 展开注册。
  */
 export type ProjectRelatedModuleDef = {
   path: string

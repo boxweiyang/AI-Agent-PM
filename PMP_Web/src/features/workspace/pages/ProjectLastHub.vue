@@ -1,5 +1,5 @@
 <!--
-  侧栏「项目详情」入口：有最近访问 id 则重定向到 /projects/:id，否则引导去列表。
+  顶栏「进入最近项目」：有最近访问 id 则重定向到项目 Dashboard，否则空态引导去列表。
 -->
 <template>
   <div class="last-hub">
@@ -28,7 +28,7 @@ function goList() {
 onMounted(() => {
   const id = getLastProjectId()
   if (id) {
-    void router.replace({ path: `/projects/${id}` })
+    void router.replace({ name: 'project-dashboard', params: { projectId: id } })
   } else {
     showHint.value = true
   }

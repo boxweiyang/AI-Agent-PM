@@ -1,6 +1,7 @@
 /**
  * 项目详情编辑：表单模型与 PATCH 载荷（REQ-M01 可编辑字段；度量字段不在此提交）。
  */
+import { joinStackItems, parseStackItems } from '@/config/techStackOptions'
 import type { ProjectPatchRequestBody, ProjectSummary } from '@/types/api-contract'
 
 export type ProjectEditForm = {
@@ -15,10 +16,11 @@ export type ProjectEditForm = {
   headcount_frontend: string
   headcount_backend: string
   headcount_qa: string
-  stack_frontend: string
-  stack_backend: string
-  stack_database: string
-  stack_middleware: string
+  /** 编辑态为多选；提交时 `joinStackItems` 写入 API 字符串 */
+  stack_frontend: string[]
+  stack_backend: string[]
+  stack_database: string[]
+  stack_middleware: string[]
   goalsText: string
   scope_in: string
   scope_out: string
@@ -64,10 +66,10 @@ export function emptyProjectEditForm(): ProjectEditForm {
     headcount_frontend: '',
     headcount_backend: '',
     headcount_qa: '',
-    stack_frontend: '',
-    stack_backend: '',
-    stack_database: '',
-    stack_middleware: '',
+    stack_frontend: [],
+    stack_backend: [],
+    stack_database: [],
+    stack_middleware: [],
     goalsText: '',
     scope_in: '',
     scope_out: '',
@@ -89,10 +91,10 @@ export function editFormFromProject(p: ProjectSummary): ProjectEditForm {
     headcount_frontend: p.headcount_frontend != null ? String(p.headcount_frontend) : '',
     headcount_backend: p.headcount_backend != null ? String(p.headcount_backend) : '',
     headcount_qa: p.headcount_qa != null ? String(p.headcount_qa) : '',
-    stack_frontend: p.stack_frontend ?? '',
-    stack_backend: p.stack_backend ?? '',
-    stack_database: p.stack_database ?? '',
-    stack_middleware: p.stack_middleware ?? '',
+    stack_frontend: parseStackItems(p.stack_frontend),
+    stack_backend: parseStackItems(p.stack_backend),
+    stack_database: parseStackItems(p.stack_database),
+    stack_middleware: parseStackItems(p.stack_middleware),
     goalsText: p.goals?.length ? p.goals.join('\n') : '',
     scope_in: p.scope_in ?? '',
     scope_out: p.scope_out ?? '',
@@ -118,10 +120,10 @@ export function patchBodyFromEditForm(f: ProjectEditForm): ProjectPatchRequestBo
     headcount_frontend: parseCount(f.headcount_frontend),
     headcount_backend: parseCount(f.headcount_backend),
     headcount_qa: parseCount(f.headcount_qa),
-    stack_frontend: f.stack_frontend.trim() || undefined,
-    stack_backend: f.stack_backend.trim() || undefined,
-    stack_database: f.stack_database.trim() || undefined,
-    stack_middleware: f.stack_middleware.trim() || undefined,
+    stack_frontend: joinStackItems(f.stack_frontend) || undefined,
+    stack_backend: joinStackItems(f.stack_backend) || undefined,
+    stack_database: joinStackItems(f.stack_database) || undefined,
+    stack_middleware: joinStackItems(f.stack_middleware) || undefined,
     goals: goals.length ? goals : undefined,
     scope_in: f.scope_in.trim() || undefined,
     scope_out: f.scope_out.trim() || undefined,

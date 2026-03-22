@@ -29,19 +29,29 @@
 | `src/stores/auth.ts` | 登录态、用户摘要、`sessionStorage` 持久化（Mock 用；接真实后端时收敛 Refresh 存储方式） |
 | `src/stores/theme.ts` | **深色 / 浅色**：`localStorage` 键 `pmp_theme`；`html.dark` 与 Element Plus 暗色变量联动（TECH-002） |
 | `src/components/ThemeSegmented.vue` | 顶栏与登录页共用的「深色 / 浅色」切换（`el-radio-group`） |
-| `src/router/index.ts` | 路由表；`/login` 公开；`/` 套 `MainLayout`；**导航守卫**校验登录 |
-| `src/layouts/MainLayout.vue` | **REQ-M09 站级壳**：侧栏 + 顶栏 + `router-view` |
-| `src/config/siteNavMenu.ts` | 站级侧栏 **模块菜单**（主菜单图标 + 子项；与 REQ-MASTER 对齐；未实现项 disabled +「待开发」） |
-| `src/config/projectRelatedModules.ts` | **项目内**模块路由清单（与 `artifacts` 键对齐；由 `workspace/routes.ts` 注册子路由） |
+| `src/router/index.ts` | 路由表；`/login` 公开；`/` 套 `WorkbenchLayout`；`/projects/:id` 套 `ProjectLayout`；**导航守卫**校验登录与 `requiresSystemAdmin` |
+| `src/layouts/WorkbenchLayout.vue` | **工作台壳（无侧栏）**：顶栏 + `router-view`；未进入项目时使用 |
+| `src/config/productBranding.ts` | 产品展示名 **`PRODUCT_DISPLAY_NAME`**（智能项目管理系统） |
+| `src/layouts/ProjectLayout.vue` | **项目壳**：侧栏 **三态**（全宽 / 仅图标 / 全收起 + 跨边「腰钮」）+ 顶栏 + `router-view`；品牌行 **48px** |
+| `src/components/PmpBrandMark.vue` | 侧栏 **品牌 SVG**（叠层条 + 圆点，`currentColor`） |
+| `src/config/projectModuleMenuIcons.ts` | 项目侧栏 **各模块菜单图标**（按路由名语义映射） |
+| `src/components/AppHeaderBar.vue` | 顶栏：工作台为 **标题**；项目内为 **项目名 + 切换图标 + `-` + 页标题**；另 **`功能`** 下拉、主题、用户、退出 |
+| `src/components/TechStackMultiSelect.vue` | 项目详情：技术栈 **多选下拉**（`el-select` multiple + allow-create） |
+| `src/config/techStackOptions.ts` | 四类技术栈 **预设选项** + 字符串与数组互转（`parseStackItems` / `joinStackItems`） |
+| `src/config/projectSidebarNav.ts` | **项目内**侧栏分组（概览 + 各 REQ 模块；路由名与 `projectLayoutRoutes` 一致） |
+| `src/config/projectRelatedModules.ts` | **项目内**模块路由清单（与 `artifacts` 键对齐；由 `projectLayoutRoutes.ts` 注册） |
 | `src/features/auth/pages/Login.vue` | 登录页（Mock：`admin` / 任意密码） |
-| `src/features/workspace/` | 工作台：`routes.ts` 挂载 `/`、`/projects`、`/projects/last`、`/projects/:id`；`pages/Home.vue`；`components/ProjectCreateDialog.vue` |
-| `src/features/workspace/pages/ProjectDetail.vue` | 项目详情（GET 单项目；M08 前占位） |
-| `src/features/workspace/pages/ProjectLastHub.vue` | 侧栏「项目详情」：`/projects/last` 重定向或空态 |
-| `src/api/last-project.ts` | `sessionStorage` 记录最近访问项目 id（侧栏与创建后跳转） |
+| `src/features/workspace/routes.ts` | **工作台子路由**：`/`、`/projects`、`/enter-last-project`、`/settings/*`（挂到 `/` 下） |
+| `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：默认 Dashboard、`detail`、各 `m0x/...` 占位 |
+| `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue` |
+| `src/features/workspace/pages/ProjectDetail.vue` | 项目详情（`.../detail`；GET/PATCH 单项目） |
+| `src/features/workspace/pages/ProjectLastHub.vue` | **`/enter-last-project`**：有最近 id 则进 Dashboard，否则空态 |
+| `src/features/settings/pages/` | **设置占位页**：`AiSettingsPage`（REQ-M11 说明）、`Profile`、`System` |
+| `src/api/last-project.ts` | `sessionStorage` 记录最近访问项目 id（顶栏「进入最近项目」、创建/打开项目时写入） |
 | `src/features/workspace/projectPresentation.ts` | 状态分组顺序、Tag 颜色映射、预计完成日与剩余天数文案、Task 待办摘要 |
 | `src/features/workspace/projectDetailDisplay.ts` | 项目详情页：M01 字段空态与日期/简介等展示辅助 |
 | `src/features/*/routes.ts` | 其它域已建 **空路由数组** 占位，开发时在此 export 并在 `router/index.ts` 合并 |
-| `src/core/permissions.ts` | 权限编码常量与 **后续** 细粒度菜单过滤（当前按 `adminOnly` 等在 `siteNavMenu` 过滤） |
+| `src/core/permissions.ts` | 权限编码常量与 **后续** 细粒度过滤说明（与顶栏/路由 meta 配合） |
 | `src/mocks/handlers.ts` | MSW：与 **contracts** 同步的 mock 实现（health、auth、projects、ai echo） |
 | `src/App.vue` | `el-config-provider` + **中文 locale** |
 | `src/styles/global.css` | 全局字体与底色；**浅色**下柔化 EP 背景变量与菜单底；登录页浅色背景渐变 |
@@ -131,4 +141,4 @@ npm config set strict-ssl false
 1. `npm run dev:mock`（或 `.env.development` 中 `VITE_USE_MSW=true`）
 2. 浏览器打开应用 → 跳转 `/login`
 3. 用户名 **`admin`**，密码任意非空 → 进入工作台 `/`
-4. 侧栏 **项目管理** → `/projects`（与工作台同页组件，标题不同）
+4. 顶栏 **功能 → 进入最近项目** 或从工作台打开某一项目 → 进入 **`/projects/:id/dashboard`**（此时出现 **项目左侧菜单**）

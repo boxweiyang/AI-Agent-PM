@@ -1,6 +1,6 @@
 <!--
   登录页（REQ-M09 / TECH-004）
-  - 独立路由 `/login`，不套 MainLayout。
+  - 独立路由 `/login`，不套工作台壳。
   - Mock：MSW 仅演示「管理员」账号（用户名 `admin`，密码任意非空）；正式后端接入后替换为真实校验与错误码。
   - 功能说明文档：docs/FEATURES.md「/login 登录页」。
 -->
@@ -14,7 +14,7 @@
       <el-card class="login-card" shadow="hover">
         <template #header>
           <div class="card-header">
-            <span class="title">PMP 智能项目管理</span>
+            <span class="title">{{ PRODUCT_DISPLAY_NAME }}</span>
             <span class="subtitle">账号登录（Mock：admin / 任意密码）</span>
           </div>
         </template>
@@ -67,6 +67,7 @@ import { ElMessage } from 'element-plus'
 
 import { LOGIN_REMEMBER_7D_KEY } from '@/api/auth-storage'
 import ThemeSegmented from '@/components/ThemeSegmented.vue'
+import { PRODUCT_DISPLAY_NAME } from '@/config/productBranding'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()

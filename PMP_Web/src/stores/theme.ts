@@ -32,7 +32,7 @@ export const useThemeStore = defineStore('theme', () => {
   const mode = ref<ThemeMode>(readStoredTheme())
 
   /**
-   * 切换并持久化；登录前后共用同一 store，故登录页与 MainLayout 切换效果一致。
+   * 切换并持久化；登录前后共用同一 store，故登录页与登录后各布局切换效果一致。
    */
   function setMode(next: ThemeMode): void {
     if (mode.value === next) return

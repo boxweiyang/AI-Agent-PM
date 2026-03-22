@@ -3,14 +3,13 @@
 -->
 <template>
   <div class="mod-placeholder">
-    <el-page-header class="ph" @back="goDetail">
-      <template #content>
-        <span class="ph-title">{{ title }}</span>
-        <el-tag size="small" type="info" class="ph-req">{{ reqRef }}</el-tag>
-      </template>
-    </el-page-header>
-
     <el-card class="mod-card" shadow="never">
+      <template #header>
+        <div class="mod-card-head">
+          <span class="mod-card-title">{{ title }}</span>
+          <el-tag v-if="reqRef" size="small" type="info">{{ reqRef }}</el-tag>
+        </div>
+      </template>
       <template v-if="loading">
         <el-skeleton :rows="4" animated />
       </template>
@@ -125,18 +124,17 @@ onMounted(() => {
   padding: 0 8px 32px;
 }
 
-.ph {
-  margin-bottom: 16px;
+.mod-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.ph-title {
+.mod-card-title {
   font-weight: 600;
-  font-size: 16px;
-}
-
-.ph-req {
-  margin-left: 10px;
-  vertical-align: middle;
+  font-size: 15px;
 }
 
 .mod-card {

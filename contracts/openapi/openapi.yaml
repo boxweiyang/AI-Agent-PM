@@ -401,16 +401,16 @@ components:
           description: 预计测试人力（可选）
         stack_frontend:
           type: string
-          description: 技术栈-前端（可选）
+          description: 技术栈-前端（可选；前端为多选下拉，存为「、」或英文逗号分隔的多个条目）
         stack_backend:
           type: string
-          description: 技术栈-后端（可选）
+          description: 技术栈-后端（可选；同上）
         stack_database:
           type: string
-          description: 技术栈-数据库（可选）
+          description: 技术栈-数据库（可选；同上）
         stack_middleware:
           type: string
-          description: 技术栈-中间件（可选）
+          description: 技术栈-中间件（可选；同上）
         goals:
           type: array
           description: REQ-M01 项目目标（1～3 条，可选）
@@ -508,12 +508,16 @@ components:
           minimum: 0
         stack_frontend:
           type: string
+          description: 技术栈-前端；多选 UI 存为「、」或英文逗号分隔
         stack_backend:
           type: string
+          description: 技术栈-后端；同上
         stack_database:
           type: string
+          description: 技术栈-数据库；同上
         stack_middleware:
           type: string
+          description: 技术栈-中间件；同上
         goals:
           type: array
           items:
@@ -575,12 +579,16 @@ components:
           minimum: 0
         stack_frontend:
           type: string
+          description: 技术栈-前端；多选 UI 存为「、」或英文逗号分隔
         stack_backend:
           type: string
+          description: 技术栈-后端；同上
         stack_database:
           type: string
+          description: 技术栈-数据库；同上
         stack_middleware:
           type: string
+          description: 技术栈-中间件；同上
         goals:
           type: array
           items:
