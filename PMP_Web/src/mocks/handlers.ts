@@ -640,6 +640,79 @@ export const handlers = [
         },
       })
     }
+    if (capability === 'requirement_doc_assist') {
+      const payload = body.payload ?? {}
+      const action = String(payload?.action ?? 'chat')
+      const message = String(payload?.message ?? '').trim()
+      const markdown = String(payload?.markdown ?? '').trim()
+      const lineCount = markdown ? markdown.split('\n').length : 0
+
+      if (action === 'generate_doc') {
+        const excerpt = message ? message.slice(0, 120) : '（未提供具体诉求）'
+        const doc = `# 需求文档
+
+## 目标
+- 目标概述：${excerpt}
+- 成功标准：输出内容应包含可验收的条目与边界说明。
+
+## 功能清单
+- （待你在对话里补充/确认的条目1）
+- （待你在对话里补充/确认的条目2）
+- （待你在对话里补充/确认的条目3）
+
+## 交互流程
+- 主流程（简版）：
+  - 用户发起需求澄清/补充
+  - AI 汇总为建议
+  - 用户点击「生成并应用」
+- 异常流程（简版）：
+  - 输入缺失：提示补充
+  - 解析失败：提示错误并要求重新回填/澄清
+
+## 业务规则
+- 不编造未提供的信息，无法确定的用「待确认」标记。
+- 保存产生新版本；覆盖仅允许在最新版本时进行。
+
+## 异常处理
+- 网络/调用失败：返回错误信息，不写脏数据。
+- 版本链冲突：提示刷新并说明仅允许从最新分叉。
+
+## 验收标准
+- 目标/功能/流程/规则/异常/验收六块齐全
+- 每条功能都有可观察的验收条件或验证方式
+- 历史版本列表可回到任意版本并可导出
+`
+        return HttpResponse.json({
+          code: 0,
+          message: 'ok',
+          data: {
+            capability,
+            markdown: doc,
+          },
+        })
+      }
+
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          capability,
+          suggestion: `## AI 建议（Mock）
+
+### 你提出的诉求
+${message || '（未提供）'}
+
+### 下一步我需要你确认/补充的点
+- 你的「目标」具体是什么？可否用一句话 + 一个可衡量指标描述？
+- 「功能清单」你希望粒度到什么层级？（页面级 / 模块级 / 条目级）
+- 交互流程里，你最关心哪一个异常场景？（版本冲突 / 输入缺失 / 解析失败）
+
+### 当前文档状态
+- 已有行数：${lineCount}
+`,
+        },
+      })
+    }
     return HttpResponse.json({
       code: 0,
       message: 'ok',

@@ -68,21 +68,23 @@
           </el-table-column>
           <el-table-column label="操作" width="280" fixed="right">
             <template #default="{ row }">
-              <el-button type="primary" link @click="openVersion(row.id)">打开</el-button>
-              <el-dropdown trigger="click" @command="(c: string) => onRowExportCommand(row.id, c)">
-                <el-button type="primary" link>
-                  导出
-                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="md">Markdown</el-dropdown-item>
-                    <el-dropdown-item command="html">HTML</el-dropdown-item>
-                    <el-dropdown-item command="pdf">PDF（打印）</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-              <el-button type="danger" link @click="confirmDelete(row)">删除</el-button>
+              <div class="row-actions">
+                <el-button type="primary" link class="row-action-btn" @click="openVersion(row.id)">打开</el-button>
+                <el-dropdown trigger="click" @command="onRowExportCommandForRow(row.id, $event)">
+                  <el-button type="primary" link class="row-action-btn">
+                    导出
+                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="md">Markdown</el-dropdown-item>
+                      <el-dropdown-item command="html">HTML</el-dropdown-item>
+                      <el-dropdown-item command="pdf">PDF（打印）</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+                <el-button type="danger" link class="row-action-btn" @click="confirmDelete(row)">删除</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -272,6 +274,10 @@ function onRowExportCommand(versionId: string, command: string) {
   }
 }
 
+function onRowExportCommandForRow(versionId: string, command: unknown) {
+  onRowExportCommand(versionId, String(command))
+}
+
 async function onExportLatestCommand(command: string) {
   const vid = latestVersionId.value
   if (!vid) return
@@ -350,5 +356,17 @@ onMounted(() => {
 
 .req-table {
   width: 100%;
+}
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.row-action-btn {
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 </style>

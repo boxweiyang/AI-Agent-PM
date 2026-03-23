@@ -38,6 +38,7 @@
               <el-radio-button label="edit">编辑</el-radio-button>
               <el-radio-button label="preview">预览</el-radio-button>
             </el-radio-group>
+            <el-button size="small" @click="aiVisible = true">AI 辅助</el-button>
             <el-dropdown trigger="click" @command="onExportCommand">
               <el-button size="small" type="primary" plain>
                 导出
@@ -58,26 +59,27 @@
         </div>
       </template>
 
-      <el-alert
-        v-if="!detail.is_latest"
-        type="warning"
-        show-icon
-        :closable="false"
-        class="detail-alert"
-        title="当前为历史版本，仅可查看与导出。请在列表打开「最新」版本进行编辑与保存。"
-      />
-
-      <div v-show="viewMode === 'edit'" class="editor-pane">
-        <el-input
-          v-model="markdown"
-          type="textarea"
-          :autosize="{ minRows: 22, maxRows: 48 }"
-          :readonly="!detail.is_latest"
-          placeholder="Markdown 正文"
-          class="md-input"
+      <div class="detail-content">
+        <el-alert
+          v-if="!detail.is_latest"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="detail-alert"
+          title="当前为历史版本，仅可查看与导出。请在列表打开「最新」版本进行编辑与保存。"
         />
+
+        <div v-show="viewMode === 'edit'" class="editor-pane">
+          <el-input
+            v-model="markdown"
+            type="textarea"
+            :readonly="!detail.is_latest"
+            placeholder="Markdown 正文"
+            class="md-input"
+          />
+        </div>
+        <div v-show="viewMode === 'preview'" class="preview-pane markdown-body" v-html="renderedHtml" />
       </div>
-      <div v-show="viewMode === 'preview'" class="preview-pane markdown-body" v-html="renderedHtml" />
     </el-card>
 
     <el-dialog v-model="saveDialogVisible" title="保存方式" width="480px" destroy-on-close>
@@ -92,6 +94,17 @@
         <el-button type="primary" :loading="saving" @click="doSave('new')">新建版本</el-button>
       </template>
     </el-dialog>
+
+    <AiAssistDrawer
+      v-model="aiVisible"
+      title="AI 辅助（需求文档）"
+      description="围绕当前文档与你的诉求生成建议，确认后再应用到正文。"
+      capability="requirement_doc_assist"
+      :default-prompt="defaultAiPrompt"
+      :external-prompt="externalAiPrompt"
+      :payload-base="aiPayloadBase"
+      @apply="handleAiApply"
+    />
   </div>
 </template>
 
@@ -102,6 +115,8 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { apiClient } from '@/api/client'
+import AiAssistDrawer from '@/components/AiAssistDrawer.vue'
+import { buildRequirementDocDefaultPrompt, buildRequirementDocExternalPrompt } from '@/config/aiPromptTemplates'
 import type {
   ApiEnvelope,
   ProjectOneData,
@@ -126,6 +141,7 @@ const detail = ref<RequirementDocVersionDetail | null>(null)
 const markdown = ref('')
 const viewMode = ref<'edit' | 'preview'>('edit')
 const saveDialogVisible = ref(false)
+const aiVisible = ref(false)
 
 const artifactKey = computed(() => (route.meta.artifactKey as string) ?? '')
 const reqRef = computed(() => (route.meta.reqRef as string) ?? '')
@@ -141,6 +157,33 @@ const subTitlePending = computed(
 )
 
 const renderedHtml = computed(() => markdownToHtmlFragment(markdown.value || ''))
+const defaultAiPrompt = computed(() => {
+  const title = detail.value ? `v${detail.value.version_no}` : ''
+  const excerpt = markdown.value.trim().slice(0, 220)
+  return buildRequirementDocDefaultPrompt({
+    versionLabel: title || '（未命名版本）',
+    markdownExcerpt: excerpt || '（正文为空）',
+  })
+})
+
+const externalAiPrompt = computed(() => {
+  const title = detail.value ? `v${detail.value.version_no}` : ''
+  const excerpt = markdown.value.trim().slice(0, 220)
+  return buildRequirementDocExternalPrompt({
+    versionLabel: title || '（未命名版本）',
+    markdownExcerpt: excerpt || '（正文为空）',
+  })
+})
+
+const aiPayloadBase = computed<Record<string, unknown>>(() => {
+  const pid = typeof route.params.projectId === 'string' ? route.params.projectId : ''
+  return {
+    project_id: pid,
+    version_id: detail.value?.id ?? '',
+    version_no: detail.value?.version_no ?? 0,
+    markdown: markdown.value,
+  }
+})
 
 function goList() {
   const id = route.params.projectId
@@ -222,6 +265,7 @@ async function doSave(mode: 'new' | 'overwrite') {
       }
       ElMessage.success('已覆盖当前版本')
       saveDialogVisible.value = false
+      await router.push({ name: 'project-m02-requirements', params: { projectId: pid } })
     } else {
       const { data } = await apiClient.post<ApiEnvelope<RequirementDocVersionDetail>>(
         `/api/v1/projects/${pid}/requirement-doc/versions`,
@@ -231,10 +275,7 @@ async function doSave(mode: 'new' | 'overwrite') {
       if (d?.id) {
         ElMessage.success('已新建版本')
         saveDialogVisible.value = false
-        await router.replace({
-          name: 'project-m02-requirements-version',
-          params: { projectId: pid, versionId: d.id },
-        })
+        await router.push({ name: 'project-m02-requirements', params: { projectId: pid } })
       }
     }
   } catch (e: unknown) {
@@ -262,6 +303,20 @@ function onExportCommand(command: string) {
   if (command === 'md' || command === 'html' || command === 'pdf') exportCurrent(command)
 }
 
+function handleAiApply(text: string) {
+  if (!detail.value?.is_latest) {
+    ElMessage.warning('历史版本不允许写入，请打开最新版本')
+    return
+  }
+  if (!markdown.value.trim()) {
+    markdown.value = text
+    viewMode.value = 'edit'
+    return
+  }
+  markdown.value = `${markdown.value.trim()}\n\n---\n\n${text}\n`
+  viewMode.value = 'edit'
+}
+
 watch(
   () => [route.params.projectId, route.params.versionId],
   () => {
@@ -275,10 +330,30 @@ watch(
 .req-doc-detail {
   width: 100%;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .detail-card {
   width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detail-content {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .detail-head {
@@ -313,7 +388,24 @@ watch(
 }
 
 .editor-pane {
-  min-height: 320px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.md-input {
+  height: 100%;
+}
+
+.md-input :deep(.el-textarea) {
+  height: 100%;
+}
+
+.md-input :deep(.el-textarea__inner) {
+  height: 100% !important;
+  min-height: 100% !important;
+  overflow: auto;
+  resize: none;
 }
 
 .md-input :deep(textarea) {
@@ -323,7 +415,8 @@ watch(
 }
 
 .preview-pane {
-  min-height: 320px;
+  flex: 1;
+  min-height: 0;
   padding: 12px 4px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;

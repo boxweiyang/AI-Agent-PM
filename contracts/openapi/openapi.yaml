@@ -463,8 +463,18 @@ paths:
   /api/v1/ai/invoke:
     post:
       tags: [ai]
-      summary: 调用 AI 能力（脚手架 echo）
+      summary: 调用 AI 能力（AI 网关统一入口）
       operationId: postAiInvoke
+      description: |
+        通过 AI 网关调用具体能力（由后端根据 `capability` 与 `payload` 编排）。
+
+        对于 `capability = requirement_doc_assist`（REQ-M02 需求文档协作）：
+        - `payload.action = chat`
+          - `payload.message`：用户本轮输入
+          - 响应：`data.suggestion`（建议文本，前端会作为聊天回复逐字展示）
+        - `payload.action = generate_doc`
+          - `payload.message`：可为空（由历史 `payload.history` + `payload.default_prompt` 驱动）
+          - 响应：`data.markdown`（完整需求文档 Markdown，前端应用到编辑器）
       requestBody:
         required: true
         content:
@@ -491,7 +501,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Access Token（`Authorization: Bearer <access>`）
+      description: "Access Token（`Authorization: Bearer <access>`）"
 
   schemas:
     EnvelopeBase:
@@ -1090,6 +1100,68 @@ components:
             data:
               $ref: "#/components/schemas/RequirementDocVersionDetail"
 
+    AiProvider:
+      type: string
+      description: 站内 AI 使用的模型/服务提供方枚举（由后端路由到具体模型编排）。
+      enum: [qwen, doubao, kimi, gemini]
+
+    AiRequirementDocAssistAction:
+      type: string
+      description: REQ-M02 需求文档协作（站内 AI）在网关侧的动作枚举。
+      enum: [chat, generate_doc]
+
+    AiChatHistoryItem:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          description: 发送方角色
+          enum: [user, assistant]
+        content:
+          type: string
+          description: 消息正文（纯文本）
+
+    AiInvokePayload:
+      type: object
+      description: AI 网关通用请求体中 `payload` 的字段集合（不同 `capability` 可能只使用其中一部分）。
+      additionalProperties: true
+      default: {}
+      properties:
+        # 通用
+        provider:
+          $ref: "#/components/schemas/AiProvider"
+        action:
+          $ref: "#/components/schemas/AiRequirementDocAssistAction"
+        message:
+          type: string
+          description: 用户本轮输入内容（capability 通用字段）
+        default_prompt:
+          type: string
+          description: 首次打开/本轮建议的默认提示词（可选）
+        history:
+          type: array
+          description: 简化后的历史上下文（用于续聊；仅保留 role/content）
+          items:
+            $ref: "#/components/schemas/AiChatHistoryItem"
+
+        # 需求文档（REQ-M02）上下文（示例字段；后端按需读取）
+        project_id:
+          type: string
+        version_id:
+          type: string
+        version_no:
+          type: integer
+          minimum: 0
+        markdown:
+          type: string
+
+        # Dashboard（REQ-M08）上下文示例
+        scope_label:
+          type: string
+        iteration_key:
+          type: string
+
     AiInvokeRequest:
       type: object
       required: [capability]
@@ -1099,9 +1171,7 @@ components:
           description: 与 pmp_ai_agent.registry 键一致，如 echo
           example: echo
         payload:
-          type: object
-          additionalProperties: true
-          default: {}
+          $ref: "#/components/schemas/AiInvokePayload"
 
     EnvelopeAiInvoke:
       allOf:
