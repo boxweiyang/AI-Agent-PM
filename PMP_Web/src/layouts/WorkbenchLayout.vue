@@ -3,7 +3,7 @@
 -->
 <template>
   <el-container class="workbench-shell">
-    <AppHeaderBar :title="headerTitle" @logout="onLogout" />
+    <AppHeaderBar @logout="onLogout" />
     <el-main class="workbench-main">
       <router-view />
     </el-main>
@@ -11,20 +11,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 import AppHeaderBar from '@/components/AppHeaderBar.vue'
 import { useAuthStore } from '@/stores/auth'
 
-const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-
-const headerTitle = computed(() => {
-  const t = route.meta.title
-  return typeof t === 'string' && t.length > 0 ? t : '工作台'
-})
 
 async function onLogout() {
   await auth.logout()
@@ -43,7 +36,7 @@ async function onLogout() {
 .workbench-main {
   flex: 1;
   min-height: 0;
-  padding: 16px;
+  padding: 16px 50px;
   box-sizing: border-box;
 }
 </style>

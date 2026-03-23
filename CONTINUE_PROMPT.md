@@ -1,38 +1,45 @@
 # 下一会话接续提示词（复制到新对话）
 
+> **完整交接**（已实现 / 缺口 / 建议下一步 / 关键路径 / 修订记录）：仓库根目录 **`AI_AGENT_PM_HANDOFF.md`**。**新会话优先读该文件**，本文仅提供「一键复制」的浓缩版。
+
 将下面 **「【复制区】」** 内的全部内容复制到 Cursor 新对话中发送即可。
 
 ---
 
 ## 【复制区】
 
-我是 **AI-Agent-PM** 仓库的维护者。工作区路径：`AI-Agent-PM`。
+我是 **AI-Agent-PM** 仓库维护者。工作区：**AI-Agent-PM**。
 
-**已完成（需求阶段）**
+**请先阅读** 仓库根目录 **`AI_AGENT_PM_HANDOFF.md`**（§2.1 策略、§4～§6），再协助我。
 
-- 新版本需求全部在 **`PMP_Req_V2/`**，与旧版 **`PMP_Doc/`** 隔离。
-- **分册已齐且已定稿（M01～M12）**，入口与索引在 **`PMP_Req_V2/REQ-MASTER_完整需求总文档.md`**。
-- 模块概览：M01 立项；M02/M02B/M02C/M02D 需求与技术文档、接口、库表；M03 迭代·Story·Task；M04 Task/看板；M05 人力池；M06 CR；M07 提测/缺陷/联调；M08 项目内 Dashboard；M09 **Vue3 + Element Plus SPA**、侧边栏、按角色分权限的首页/工作台；M10 收尾复盘与知识索引；M11 全站 AI 交互规范；M12 通用规范与发版冒烟验收。
-- 产品形态：**管理系统为主**，AI **按需抽屉**；业务数据写入需用户 **显式应用/保存**，文档类支持 **一键撤回 AI 修改并清上下文**（见 M11）。
-- **REQ-MASTER §3 产品总述** 已写入；**§5** 链到技术规划。
-- **Service** **TECH-004**；**AI** **TECH-005 v0.4**（精简：模型 Key、上下文、偏好、ai_settings）。
+**已定策略**
 
-**接下来请你按顺序协助我**
+- **MSW Mock 优先**：日常用 **`cd PMP_Web && npm run dev:mock`**；在 **不接 PMP_Service** 的前提下把前端路径做完整。
+- 新能力：**先扩 `contracts/openapi/openapi.yaml`，再补 `PMP_Web/src/mocks/handlers.ts`**；改界面同步 **`PMP_Web/docs/FEATURES.md`** §7。
+- Mock 验收通过后，再 **`dev:api` 联调** 与 Agent。
 
-1. ~~补充 REQ-MASTER 总述~~（**已完成**）
+**需求与实现依据**
 
-2. ~~**技术选型 + 架构 + 仓库结构（三子项目）**~~（**已完成**，见 **TECH-001 v0.3**）
+- 产品需求：**`PMP_Req_V2/`**，入口 **`REQ-MASTER_完整需求总文档.md`**。
+- 前端行为：**`PMP_Web/docs/FEATURES.md`** + 当前代码。
+- 接口形状：**`contracts/openapi/openapi.yaml`**。
 
-3. ~~**补全 TECH-001 待定项**~~（**已完成**：**TECH-001 v0.3 §9** 已封板栈、DB、JWT、API、`{code,message,data}`、**V1 以同步 JSON 为主 / SSE 后置**、本地编排；细则见 **TECH-002～005**）
-
-4. ~~**落地脚手架**~~（**已完成**）  
-   - 根目录 **`PMP_Web` / `PMP_Service` / `PMP_AI_Agent`**：目录 + **README** + **`docs/STRUCTURE.md`** + **最小可运行**（`echo` Agent、`/api/v1/health` + `/api/v1/ai/invoke`、Web 首页联调）。详见根 **`README.md`**。
-
-**工作方式**
-
-- 先通读 **`REQ-MASTER`** 与 **`PMP_Req_V2/README.md`**，改动以 Markdown 落盘为准；与我确认后再大改结构。  
-- 回答与文档使用 **简体中文**。
+**约束**：回答与说明用 **简体中文**。
 
 ---
 
 ## 【复制区结束】
+
+### 与旧版清单的关系
+
+- 需求定稿（M01～M12）、三子项目脚手架、TECH-001～005 等 **已在前期完成**；细节见 **REQ-MASTER**、**PMP_Req_V2/README.md**、各 **TECH-*** 文档。
+- **当前阶段工作项** 以 **`AI_AGENT_PM_HANDOFF.md` §6** 为准（M02 竖切 → M03～M11 铺开 → Dashboard Mock → 设置页 Mock 持久等），勿再以本文下方历史条目为「待办」。
+
+---
+
+## 修订记录（本文档）
+
+| 日期 | 摘要 |
+|------|------|
+| （首版） | 短接续词 + 需求/脚手架已完成清单。 |
+| 2026-03-22 | 与 **HANDOFF** 对齐：**Mock 优先**、复制区浓缩、明确 §6 为当前待办来源。 |

@@ -5,7 +5,7 @@ info:
     前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
 
     **鉴权（V1）**：账号密码登录；Access JWT（Bearer）；Refresh 见 TECH-004（实现可选 Cookie HttpOnly；契约中 Body 字段保留作备选）。
-  version: 0.2.6-draft
+  version: 0.2.8-draft
 
 servers:
   - url: http://127.0.0.1:8000
@@ -224,6 +224,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeProjectOne"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/dashboard:
+    get:
+      tags: [project]
+      summary: 项目 Dashboard 聚合（REQ-M08，V1 只读）
+      description: |
+        项目内首屏指标与风险列表；**只读聚合**，编辑仍在 M03～M07 等各模块完成。
+        查询参数 `iteration_key`：`current`（默认，服务端解析为进行中迭代）、`all`（全量）、或具体迭代 id（与返回体 `iteration_options[].id` 对齐）。
+      operationId: getProjectDashboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: iteration_key
+          in: query
+          required: false
+          schema:
+            type: string
+            default: current
+            description: current | all | 迭代 id
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeProjectDashboard"
         "401":
           description: 未登录
           content:
@@ -470,6 +507,117 @@ components:
           additionalProperties:
             type: boolean
 
+    DashboardIterationOption:
+      type: object
+      required: [id, name, is_current]
+      properties:
+        id:
+          type: string
+          description: 迭代唯一 id；与请求 `iteration_key` 对应（`current`/`all` 除外）
+        name:
+          type: string
+          description: 展示名，如「Sprint 3（进行中）」
+        is_current:
+          type: boolean
+          description: 是否为当前默认迭代（进行中优先）
+
+    DashboardMetricLine:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+          description: 已格式化的展示值（如「7」「12 / 18」）
+
+    DashboardChartSpec:
+      type: object
+      required: [id, title, option]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          description: 小图标题（如「Story 累计完成（按天）」）
+        option:
+          type: object
+          description: ECharts `setOption` JSON；由 Mock/后端生成，前端直接传入图表组件
+          additionalProperties: true
+
+    DashboardCard:
+      type: object
+      required: [kind, title, metrics]
+      properties:
+        kind:
+          type: string
+          description: |
+            语义键：`iteration_progress`、`task_execution`、`blocked`、`manpower`、`change_request`、`quality`、
+            `api_catalog`（可选）、`completion_forecast`（完成预测）、`milestones_plan_actual`（计划与里程碑）等
+        title:
+          type: string
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardMetricLine"
+        charts:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardChartSpec"
+          description: 卡片内嵌多角度图表；前端支持点击弹窗放大
+        drill:
+          type: object
+          description: 前端下钻：Vue Router `name` + 可选 query（筛选参数占位）
+          properties:
+            route_name:
+              type: string
+            query:
+              type: object
+              additionalProperties:
+                type: string
+
+    DashboardRiskItem:
+      type: object
+      required: [id, kind, title, subtitle]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          description: task_blocked | bug_high | cr_pending | test_rejected 等
+        title:
+          type: string
+        subtitle:
+          type: string
+        severity_rank:
+          type: integer
+          minimum: 0
+          description: 越大越优先展示（致命缺陷 > 阻塞 Task > …）
+
+    ProjectDashboardData:
+      type: object
+      required: [scope_label, iteration_key, iteration_options, cards, risk_items]
+      properties:
+        scope_label:
+          type: string
+          description: 人类可读统计范围，如「当前迭代：Sprint 3」或「全部迭代 · 项目维度」
+        iteration_key:
+          type: string
+          description: 回显本次聚合所用的 key（`current` 会解析为具体迭代 id 时可仍回显 `current`）
+        iteration_options:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardIterationOption"
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardCard"
+        risk_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardRiskItem"
+          description: 风险与关注列表，已按 severity_rank 降序；前端可截断展示
+
     ProjectPatchRequest:
       type: object
       description: 所有字段可选；未出现的不修改。`artifacts` 仅合并出现的键。
@@ -659,6 +807,14 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/ProjectSummary"
+
+    EnvelopeProjectDashboard:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ProjectDashboardData"
 
     AiInvokeRequest:
       type: object

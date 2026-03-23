@@ -140,3 +140,52 @@ export type ProjectPatchRequestBody = {
 
 /** POST /api/v1/projects、GET /api/v1/projects/{id} 成功载荷 */
 export type ProjectOneData = ProjectSummary
+
+/** GET /api/v1/projects/{projectId}/dashboard（REQ-M08） */
+export type DashboardIterationOption = {
+  id: string
+  name: string
+  is_current: boolean
+}
+
+export type DashboardMetricLine = {
+  label: string
+  value: string
+}
+
+export type DashboardCardDrill = {
+  route_name: string
+  query?: Record<string, string>
+}
+
+/** Dashboard 卡片内嵌 ECharts：`option` 与 `echarts.setOption` 一致（Mock 由服务端/Mock 生成） */
+export type DashboardChartSpec = {
+  id: string
+  title: string
+  option: Record<string, unknown>
+}
+
+export type DashboardCard = {
+  kind: string
+  title: string
+  metrics: DashboardMetricLine[]
+  drill?: DashboardCardDrill
+  /** 多角度小图；点击后在弹窗中放大 */
+  charts?: DashboardChartSpec[]
+}
+
+export type DashboardRiskItem = {
+  id: string
+  kind: string
+  title: string
+  subtitle: string
+  severity_rank?: number
+}
+
+export type ProjectDashboardData = {
+  scope_label: string
+  iteration_key: string
+  iteration_options: DashboardIterationOption[]
+  cards: DashboardCard[]
+  risk_items: DashboardRiskItem[]
+}

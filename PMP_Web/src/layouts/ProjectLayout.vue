@@ -63,12 +63,7 @@
     </div>
 
     <el-container class="project-right" direction="vertical">
-      <AppHeaderBar
-        :context-project-name="contextProjectTitle"
-        :context-page-title="pageTitle"
-        @switch-project="goProjectList"
-        @logout="onLogout"
-      />
+      <AppHeaderBar :context-project-name="contextProjectTitle" @switch-project="goProjectList" @logout="onLogout" />
       <el-main class="project-main">
         <router-view />
       </el-main>
@@ -112,12 +107,6 @@ const sidebarMode = ref<SidebarMode>(loadSidebarMode())
 const projectId = computed(() => String(route.params.projectId ?? ''))
 
 const fetchedProjectName = ref('')
-
-const pageTitle = computed(() => {
-  const t = route.meta.title
-  if (typeof t === 'string' && t.length > 0) return t
-  return '项目'
-})
 
 const projectDisplayName = computed(() => {
   if (!projectId.value) return ''
@@ -450,7 +439,9 @@ async function onLogout() {
 .project-main {
   flex: 1;
   min-height: 0;
-  padding: 16px;
+  min-width: 0;
+  width: 100%;
+  padding: 16px 50px;
   box-sizing: border-box;
 }
 

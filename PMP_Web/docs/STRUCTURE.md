@@ -30,12 +30,13 @@
 | `src/stores/theme.ts` | **深色 / 浅色**：`localStorage` 键 `pmp_theme`；`html.dark` 与 Element Plus 暗色变量联动（TECH-002） |
 | `src/components/ThemeSegmented.vue` | 顶栏与登录页共用的「深色 / 浅色」切换（`el-radio-group`） |
 | `src/router/index.ts` | 路由表；`/login` 公开；`/` 套 `WorkbenchLayout`；`/projects/:id` 套 `ProjectLayout`；**导航守卫**校验登录与 `requiresSystemAdmin` |
-| `src/layouts/WorkbenchLayout.vue` | **工作台壳（无侧栏）**：顶栏 + `router-view`；未进入项目时使用 |
+| `src/layouts/WorkbenchLayout.vue` | **工作台壳（无侧栏）**：顶栏 + `router-view`；`el-main` **`padding: 16px 50px`** |
 | `src/config/productBranding.ts` | 产品展示名 **`PRODUCT_DISPLAY_NAME`**（智能项目管理系统） |
-| `src/layouts/ProjectLayout.vue` | **项目壳**：侧栏 **三态**（全宽 / 仅图标 / 全收起 + 跨边「腰钮」）+ 顶栏 + `router-view`；品牌行 **48px** |
+| `src/layouts/ProjectLayout.vue` | **项目壳**：侧栏 **三态** + 顶栏 + `router-view`；`el-main` **`padding: 16px 50px`**；品牌行 **48px** |
 | `src/components/PmpBrandMark.vue` | 侧栏 **品牌 SVG**（叠层条 + 圆点，`currentColor`） |
 | `src/config/projectModuleMenuIcons.ts` | 项目侧栏 **各模块菜单图标**（按路由名语义映射） |
-| `src/components/AppHeaderBar.vue` | 顶栏：工作台为 **标题**（`/settings/*` 时加 **回到项目列表**）；项目内为 **项目名 + 切换 + `-` + 页标题**；**功能** 下拉、主题、用户、退出 |
+| `src/components/AppHeaderBar.vue` | 顶栏：**返回** + **面包屑全路径**（`headerBreadcrumbs.ts`）；设置页 **回到项目列表**；项目内 **切换项目**；**功能** 下拉、主题、用户、退出 |
+| `src/utils/headerBreadcrumbs.ts` | 顶栏面包屑数据：`工作台` / `项目管理` / 设置子路径 / 项目内 `项目名` 与 `meta.title` |
 | `src/components/TechStackMultiSelect.vue` | 项目详情：技术栈 **多选下拉**（`el-select` multiple + allow-create） |
 | `src/config/techStackOptions.ts` | 四类技术栈 **预设选项** + 字符串与数组互转（`parseStackItems` / `joinStackItems`） |
 | `src/config/projectSidebarNav.ts` | **项目内**侧栏分组（概览 + 各 REQ 模块；路由名与 `projectLayoutRoutes` 一致） |
@@ -43,7 +44,9 @@
 | `src/features/auth/pages/Login.vue` | 登录页（Mock：`admin` / 任意密码） |
 | `src/features/workspace/routes.ts` | **工作台子路由**：`/`、`/projects`、`/enter-last-project`、`/settings/*`（挂到 `/` 下） |
 | `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：默认 Dashboard、`detail`、各 `m0x/...` 占位 |
-| `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue` |
+| `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue`、`components/DashboardEchart.vue` |
+| `src/features/workspace/dashboardChartOptions.ts` | Dashboard **ECharts option** 生成（Mock），由 `buildProjectDashboard` 组装进 `cards[].charts` |
+| `echarts`（`package.json`） | Dashboard 卡片内图表（core 按需注册于 `DashboardEchart.vue`） |
 | `src/features/workspace/pages/ProjectDetail.vue` | 项目详情（`.../detail`；GET/PATCH 单项目） |
 | `src/features/workspace/pages/ProjectLastHub.vue` | **`/enter-last-project`**：有最近 id 则进 Dashboard，否则空态 |
 | `src/features/settings/pages/` | **设置占位页**：`AiSettingsPage`（REQ-M11 说明）、`Profile`、`System` |

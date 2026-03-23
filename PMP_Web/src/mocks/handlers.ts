@@ -5,6 +5,8 @@
  */
 import { http, HttpResponse } from 'msw'
 
+import { buildProjectDashboard } from '@/mocks/buildProjectDashboard'
+
 type AiInvokeBody = {
   capability?: string
   payload?: Record<string, unknown> & { message?: string }
@@ -353,6 +355,26 @@ export const handlers = [
     })
   }),
 
+  /** REQ-M08：项目 Dashboard 只读聚合（iteration_key=current|all|迭代 id） */
+  http.get('/api/v1/projects/:projectId/dashboard', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const raw = params.projectId
+    const id = typeof raw === 'string' ? raw : raw?.[0] ?? ''
+    const row = mockProjects.find((r) => r.id === id)
+    if (!row) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const url = new URL(request.url)
+    const iterationKey = url.searchParams.get('iteration_key')?.trim() || 'current'
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: buildProjectDashboard(iterationKey, row),
+    })
+  }),
+
   /** 项目详情：按 id 查找内存列表 */
   http.get('/api/v1/projects/:projectId', ({ request, params }) => {
     if (!bearerOk(request)) {
@@ -440,6 +462,17 @@ export const handlers = [
     }
     const capability = body.capability ?? 'echo'
     const message = (body.payload?.message as string | undefined) ?? ''
+    if (capability === 'dashboard_weekly_summary') {
+      const scope = (body.payload?.scope_label as string | undefined) ?? '（未指定范围）'
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          capability,
+          summary: `【Mock 周报摘要】统计范围：${scope}\n\n本周完成 Story 推进与缺陷收敛；仍存在阻塞 Task 与高优缺陷，建议优先排期联调与 CR 评审。（实际内容由 Agent 基于真实数据生成）`,
+        },
+      })
+    }
     return HttpResponse.json({
       code: 0,
       message: 'ok',

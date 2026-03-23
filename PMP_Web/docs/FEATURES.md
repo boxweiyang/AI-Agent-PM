@@ -48,7 +48,7 @@
 | `/settings/profile` | 个人设置 | `WorkbenchLayout` + `settings/pages/ProfileSettingsPage.vue` | REQ-M09（占位） |
 | `/settings/system` | 系统设置 | 同上（`requiresSystemAdmin`） | REQ-M09（占位） |
 | `/projects/:projectId` | （重定向） | `ProjectLayout` → 默认 **`/dashboard`** | — |
-| `/projects/:projectId/dashboard` | 项目 Dashboard | `ProjectLayout` + `ProjectDashboard.vue` | 首屏概览（占位）；REQ-M08 后续 |
+| `/projects/:projectId/dashboard` | 项目 Dashboard | `ProjectLayout` + `ProjectDashboard.vue` | REQ-M08：`GET …/dashboard` + MSW；迭代筛选、指标卡片、风险列表、下钻、AI 摘要抽屉（Mock） |
 | `/projects/:projectId/detail` | 项目详情 | `ProjectLayout` + `ProjectDetail.vue` | M01、可编辑、模块入口 |
 | `/projects/:projectId/m02/requirements` 等 | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02～M11；`artifacts` 驱动已生成/去生成 |
 
@@ -69,14 +69,14 @@
 
 - **用途**：**未进入具体项目** 时的壳——工作台、项目列表、设置页、`/enter-last-project` 等。
 - **布局**：**顶栏** + **主内容区**（`router-view`），**无站级侧栏**。
-- **顶栏**（`AppHeaderBar`）：当前页标题（子路由 `meta.title`）、**功能** 下拉（**AI 设置**、**个人设置**、**系统设置**〔非管理员项禁用；直链 `/settings/system` 会被守卫打回首页〕、**进入最近项目**）、**深/浅色**、登录名与标签、**退出**。从功能进入 **`/settings/ai` `/settings/profile` `/settings/system`** 时，标题旁增加 **「回到项目列表」**（跳转 `/projects`）。
+- **顶栏**（`AppHeaderBar`）：左侧 **返回箭头**（回到面包屑上一级，逻辑见 `goBreadcrumbBack`）+ **`/` 分隔的完整路径**（`el-breadcrumb`，任意一级可点跳转）；**设置页** 旁仍保留 **「回到项目列表」**；**项目内** 面包屑后为 **切换项目** 链接（图标 + 文案）。右侧 **功能** 下拉（**AI 设置**、**个人设置**、**系统设置**〔非管理员项禁用；直链 `/settings/system` 会被守卫打回首页〕、**进入最近项目**）、**深/浅色**、登录名与标签、**退出**。路径生成见 `src/utils/headerBreadcrumbs.ts`。
 
 ### 5.2 `ProjectLayout`（项目内左侧菜单）
 
 - **用途**：进入 **`/projects/:projectId/...`** 后出现；菜单仅服务 **当前项目**（分组见 `projectSidebarNav.ts`：概览含 **Dashboard**、**项目详情**，其余为 REQ-M02～M11 模块入口；**各模块图标**按语义见 `projectModuleMenuIcons.ts`）。
 - **布局**：左侧 **可三态收缩的侧栏**（见下）+ 右侧 **顶栏**（`AppHeaderBar`）+ **`el-main`**。
 - **侧栏**：**品牌行高度 48px**，与顶栏一致；**`PmpBrandMark` + 产品名**（全宽时）+ 当前项目名摘要 + **`el-menu`**。**三态循环**（`localStorage` 键 `pmp_project_sidebar_mode`）：① **全宽**（约 220px，文案+图标）；② **仅图标**（约 **52px**）；③ **全收起**（宽度 0，仅保留「腰钮」）。**腰钮**左缘与菜单 **右边界对齐**（不压住菜单栏）、**无左边框**；有侧栏时约 **16×48px**，全收起 **26×54px**；**主题色外发光**；箭头字号独立控制。
-- **顶栏左侧（项目内）**：**`项目名称` + 小按钮（切换图标）+ `-` + 当前页标题**；切换跳转 **`/projects`**。
+- **顶栏左侧（项目内）**：与 **工作台** 相同为 **返回 + 面包屑**（`工作台 / 项目管理 / 项目名 / 当前页`）；**切换项目**（图标 + 文案）仍跳转 **`/projects`**（项目列表）。
 - **项目内页面**：**不在 `el-main` 顶行**再放大标题/返回条（详情仅保留 **编辑/保存** 工具条；Dashboard、模块占位把说明收进 **卡片头**）。
 - **默认路由**：访问 **`/projects/:id`** 重定向到 **`/projects/:id/dashboard`**（独立 Dashboard 优先）。
 - **需求对照**：REQ-M09（壳体）、REQ-M11（AI **使用**在各业务页抽屉；**配置**走顶栏 AI 设置页）。
@@ -103,7 +103,14 @@
 
 ## 6.1.1 `/projects/:projectId/dashboard` 项目 Dashboard（首屏）
 
-- **占位**：说明后续可接 REQ-M08 等指标汇总；提供 **打开项目详情** 跳转 `detail`（回列表用顶栏 **切换图标**）。
+- **数据**：**`GET /api/v1/projects/{projectId}/dashboard?iteration_key=`**（`current` | `all` | 具体迭代 id），契约与 **`contracts/openapi/openapi.yaml` v0.2.8** 中 `ProjectDashboardData` 对齐；卡片可含 **`charts[]`**（`DashboardChartSpec.option` 为 ECharts JSON）。开发环境由 **MSW**（`handlers.ts` + `buildProjectDashboard.ts` + `dashboardChartOptions.ts`）返回演示数据。
+- **迭代筛选**：顶栏下第一行 **迭代范围** 下拉——**全部迭代**、**当前迭代**、以及接口返回的迭代列表；切换后 **重新请求** Dashboard，**范围说明**（`scope_label`）随响应更新。
+- **布局**：指标区 **`grid` 一行两列**、**宽度随 `el-main` 撑满**（窄屏单列）；`ProjectLayout` 主区 **`min-width:0` + `width:100%`** 避免右侧空白。
+- **图表**：**`el-carousel`** 轮播（**左右箭头 + 下方指示点**），单页大图高约 **208px**；**点击当前图** → **`el-dialog` 放大**。**「查看」** 统一在卡片 **`footer` 右下角**（`router.push` 下钻）。
+- **扩展卡片**：**完成时间预测**（`completion_forecast`：累计完成度 + 预测折线、周吞吐柱+线）；**计划与里程碑**（`milestones_plan_actual`：**散点** 计划日 vs 实际日 + **参考对角线**；**柱+线** 计划工期 vs 实际工期及偏差线）。另含 REQ-M08 原有：迭代进度、Task、阻塞、人力、CR、质量、可选接口卡。
+- **风险与关注（§5）**：表格展示 `risk_items`（Mock 已按优先级排序）；**示例项目 Alpha**（`proj-demo-1`）数据较完整，其它项目为 **推导演示**。
+- **AI（§7）**：**AI：本周摘要** 打开抽屉，调用 **`POST /api/v1/ai/invoke`**，`capability: dashboard_weekly_summary`（MSW 返回固定短文）；**不写入业务数据**，用户可复制。
+- **其它**：**项目详情** 按钮跳转 `project-detail`；回项目列表用顶栏 **切换图标**。
 
 ## 6.1.2 项目内模块占位页
 
@@ -135,6 +142,13 @@
 | 2026-03-22 | `ProjectLayout`：顶栏 **项目名 + 切换 + 页标题**（原独立状态栏并入 `AppHeaderBar`）；侧栏品牌与模块分图标等。 |
 | 2026-03-22 | 产品展示名统一为 **智能项目管理系统**（`productBranding.ts`、侧栏、登录、`<title>`）。 |
 | 2026-03-22 | 项目侧栏：**三态收缩** + 跨边框腰钮；品牌行 **48px**；详情/Dashboard/模块占位去掉主区顶行大标题与 `page-header` 返回条。 |
+| 2026-03-22 | **REQ-M08 Dashboard**：OpenAPI **`GET /projects/{id}/dashboard`** + `ProjectDashboardData`；`ProjectDashboard.vue` 迭代筛选、卡片网格、风险表、模块下钻与 AI 摘要抽屉；MSW `buildProjectDashboard`（`proj-demo-1` 多迭代演示）。 |
+| 2026-03-22 | **顶栏**：`AppHeaderBar` 改为 **返回箭头 + 全路径面包屑**（可点任意一级）；`headerBreadcrumbs.ts`；项目内保留 **切换项目**。 |
+| 2026-03-22 | 项目内 **切换项目**：由仅图标改为 **图标 +「切换项目」** 文案（`AppHeaderBar`）。 |
+| 2026-03-23 | **Dashboard**：一行两列卡片；各卡 **双 ECharts**；点击 **弹窗放大**；新增 **完成预测**、**计划与里程碑**（散点+柱线）；契约 **v0.2.8** `DashboardChartSpec`；`echarts` + `dashboardChartOptions.ts`。 |
+| 2026-03-23 | Dashboard：**主区撑满**；图表改 **轮播+指示点**；**查看** 固定 **卡片 footer 右下**。 |
+| 2026-03-23 | **`el-main` 左右留白**：`ProjectLayout` / `WorkbenchLayout` 主区 **`padding: 16px 50px`**（上下 16、左右 50）。 |
+| 2026-03-23 | Dashboard：轮播区 **318px**；图 **`fill` + ResizeObserver** 撑满标题与「点击放大」之间高度（卡片主区两列满宽）。 |
 
 ---
 

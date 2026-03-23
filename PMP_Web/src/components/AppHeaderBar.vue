@@ -1,32 +1,35 @@
 <!--
-  顶栏：标题区 + 功能下拉 + 主题 + 用户 + 退出。
-  项目壳：左侧为「项目名称 [切换] - 页标题」；工作台：左侧为 route 标题。
+  顶栏：返回箭头 + 完整路径面包屑（可点任意一级）+ 项目内切换项目；
+  设置页保留「回到项目列表」；右侧功能 / 主题 / 用户 / 退出。
 -->
 <template>
   <el-header class="app-header" height="48px">
     <div class="app-header-left">
-      <div v-if="hasProjectContext" class="header-project-ctx">
-        <span class="ctx-proj" :title="contextProjectName">{{ contextProjectName }}</span>
-        <el-tooltip content="切换项目" placement="bottom">
-          <el-button class="ctx-switch" type="primary" link @click="emit('switchProject')">
-            <el-icon><Switch /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <span class="ctx-sep" aria-hidden="true">-</span>
-        <span class="ctx-page">{{ contextPageTitle }}</span>
-      </div>
-      <div
-        v-else-if="showLeftTitle && (title.trim() || showSettingsProjectListBack)"
-        class="workbench-header-left"
-      >
-        <span v-if="title.trim()" class="crumb">{{ title }}</span>
-        <template v-if="showSettingsProjectListBack">
-          <span v-if="title.trim()" class="wb-sep" aria-hidden="true">·</span>
-          <el-button class="wb-back-list" type="primary" link @click="goProjectList">
-            回到项目列表
-          </el-button>
-        </template>
-      </div>
+      <el-tooltip content="返回上一级" placement="bottom">
+        <el-button class="back-btn" type="primary" link @click="goBreadcrumbBack">
+          <el-icon><ArrowLeft /></el-icon>
+        </el-button>
+      </el-tooltip>
+
+      <el-breadcrumb class="header-bc" separator="/">
+        <el-breadcrumb-item v-for="(bc, i) in breadcrumbs" :key="i" :to="bc.to">
+          {{ bc.label }}
+        </el-breadcrumb-item>
+      </el-breadcrumb>
+
+      <template v-if="showSettingsProjectListBack">
+        <span class="wb-sep" aria-hidden="true">·</span>
+        <el-button class="wb-back-list" type="primary" link @click="goProjectList">
+          回到项目列表
+        </el-button>
+      </template>
+
+      <template v-if="isProjectShell">
+        <el-button class="ctx-switch" type="primary" link @click="emit('switchProject')">
+          <el-icon><Switch /></el-icon>
+          <span class="ctx-switch-text">切换项目</span>
+        </el-button>
+      </template>
     </div>
     <div class="app-header-right">
       <el-dropdown trigger="click" @command="onFeatureCommand">
@@ -61,27 +64,22 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowDown, Switch } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, Switch } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ThemeSegmented from '@/components/ThemeSegmented.vue'
 import { useAuthStore } from '@/stores/auth'
+import { buildHeaderBreadcrumbs } from '@/utils/headerBreadcrumbs'
 
 const props = withDefaults(
   defineProps<{
-    /** 工作台等：单列标题 */
-    title?: string
-    /** 项目壳：顶栏「项目名称」段（可与切换按钮组合） */
+    /**
+     * 项目壳：面包屑中「项目名」段展示用（与 `GET /projects/:id` 一致；未加载时内部有 `项目 id` 兜底）
+     */
     contextProjectName?: string
-    /** 项目壳：顶栏「-」后的当前页标题（如 meta.title） */
-    contextPageTitle?: string
-    showLeftTitle?: boolean
   }>(),
   {
-    title: '',
     contextProjectName: '',
-    contextPageTitle: '',
-    showLeftTitle: true,
   },
 )
 
@@ -94,9 +92,14 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const hasProjectContext = computed(() => Boolean(props.contextProjectName?.trim()))
+const isProjectShell = computed(() => {
+  const id = route.params.projectId
+  return typeof id === 'string' && id.length > 0
+})
 
-/** 功能 → AI/个人/系统设置 等页：顶栏补充「回到项目列表」 */
+const breadcrumbs = computed(() => buildHeaderBreadcrumbs(route, props.contextProjectName ?? ''))
+
+/** 设置页：保留快捷入口（与面包屑中「项目管理」等价，用户习惯） */
 const showSettingsProjectListBack = computed(() => {
   const n = route.name
   return n === 'settings-ai' || n === 'settings-profile' || n === 'settings-system'
@@ -104,6 +107,33 @@ const showSettingsProjectListBack = computed(() => {
 
 function goProjectList() {
   void router.push({ name: 'workspace-projects' })
+}
+
+/**
+ * 优先回到面包屑中「离当前页最近、且目标路由不同于当前」的一级；
+ * 否则浏览器 history.back；再否则回工作台。
+ */
+function goBreadcrumbBack() {
+  const items = breadcrumbs.value
+  const cur = route.fullPath
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]
+    if (!it.to) continue
+    try {
+      const r = router.resolve(it.to)
+      if (r.fullPath !== cur) {
+        void router.push(it.to)
+        return
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (typeof window !== 'undefined' && window.history.length > 1) {
+    router.back()
+    return
+  }
+  void router.push({ name: 'workspace-home' })
 }
 
 function onFeatureCommand(cmd: string) {
@@ -133,19 +163,60 @@ function onFeatureCommand(cmd: string) {
   flex: 1;
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
-.workbench-header-left {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
+.back-btn {
+  flex-shrink: 0;
+  padding: 4px !important;
+  min-height: auto;
+  height: auto;
+}
+
+.back-btn :deep(.el-icon) {
+  font-size: 18px;
+}
+
+.header-bc {
   min-width: 0;
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.header-bc :deep(.el-breadcrumb__item) {
+  float: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.header-bc :deep(.el-breadcrumb__inner) {
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+}
+
+.header-bc :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+}
+
+.header-bc :deep(a.el-breadcrumb__inner) {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+.header-bc :deep(a.el-breadcrumb__inner:hover) {
+  opacity: 0.85;
 }
 
 .wb-sep {
   color: var(--el-text-color-placeholder);
   user-select: none;
+  flex-shrink: 0;
 }
 
 .wb-back-list {
@@ -153,28 +224,12 @@ function onFeatureCommand(cmd: string) {
   padding: 0 !important;
 }
 
-.header-project-ctx {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px 6px;
-  min-width: 0;
-  font-size: 14px;
-  line-height: 1.25;
-}
-
-.ctx-proj {
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: min(40vw, 320px);
-}
-
 .ctx-switch {
   flex-shrink: 0;
-  padding: 4px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px !important;
   min-height: auto;
   height: auto;
 }
@@ -183,27 +238,9 @@ function onFeatureCommand(cmd: string) {
   font-size: 16px;
 }
 
-.ctx-sep {
-  color: var(--el-text-color-placeholder);
-  font-weight: 400;
-  flex-shrink: 0;
-  margin: 0 2px;
-}
-
-.ctx-page {
-  color: var(--el-text-color-regular);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: min(36vw, 280px);
-}
-
-.crumb {
+.ctx-switch-text {
   font-size: 14px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--el-text-color-primary);
+  white-space: nowrap;
 }
 
 .app-header-right {
