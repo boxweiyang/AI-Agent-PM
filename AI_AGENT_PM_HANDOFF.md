@@ -76,6 +76,7 @@
 - **项目详情**：`ProjectDetail.vue`；PATCH；**技术栈** 四类 **`TechStackMultiSelect`** + `techStackOptions.ts`（存库仍为字符串、`、` 拼接）。
 - **Dashboard（REQ-M08）**：`GET …/dashboard` + `ProjectDashboard.vue`（**一行两列**卡片、每卡 **双 ECharts**、**点击图弹窗放大**、「查看」下钻）；**完成预测** + **计划与里程碑**（散点+柱线）；MSW `buildProjectDashboard.ts` + `dashboardChartOptions.ts`；依赖 **`echarts`**。
 - **模块占位**：`artifacts` + `ProjectModulePlaceholder` 演示 PATCH。
+- **REQ-M02 需求与文档**：版本列表/详情（单版本 Markdown 编辑/预览）、导出（MD/HTML/PDF）+ AI 辅助（diff MVP、对话长期记忆与接受/回退后上下文截断）。
 - **设置页**：占位 + REQ-M11 说明（AI 页）。
 - **MSW**：`PMP_Web/src/mocks/handlers.ts` 与 OpenAPI 对齐。
 
@@ -90,7 +91,7 @@
 
 | 项 | 说明 |
 |----|------|
-| **M02～M11 真实工作台** | 现为 **占位页** + `artifacts` 演示；无真实文档/看板/AI 抽屉业务实现 |
+| **M02～M11 真实工作台** | `REQ-M02` 已实现需求文档列表/详情/版本机制与 AI 辅助（含 diff MVP + 对话长期记忆/上下文截断）；**M03～M11 仍为占位**（无真实看板/文档业务） |
 | **REQ-M08 项目内 Dashboard** | **Mock 页已落地**（卡片/风险/筛选/下钻）；与 M03～M07 **真实同源数据**仍待后端；AI 摘要为 invoke Mock |
 | **设置页** | 个人/系统/AI 配置 **尚无真库持久化**；Mock 阶段可用 **MSW + 内存/或 localStorage** 模拟保存 |
 | **PMP_Service 项目 API** | **本阶段不阻塞前端**；真后端对齐契约为 Mock 闭环之后的工作 |
@@ -105,13 +106,13 @@
 
 > **原则**：不接真后端也能在浏览器里 **完整点通产品路径**；缺接口就 **YAML + MSW** 先定形状。
 
-1. **竖切样板模块（建议 M02 需求文档）**：用独立页面组件替换通用 **`ProjectModulePlaceholder`**（或先 M02 专用路由）；含列表/详情或编辑壳、空态与错误态；挂上 **REQ-M11 AI 抽屉**（建议区 + 显式「应用」到表单）的最小闭环。  
+1. **TECH-001～005：开始完成技术设计页面**：把 `PMP_Req_V2/00-技术规划` 里各 TECH 文档的结构/目录做成页面（先实现导航、展示与导出壳，再补交互）。  
 2. **按 REQ 铺开 M03～M11**：对照 **`PMP_Req_V2`** 各分册，将侧栏各入口从占位升级为 **有结构的页面**（可先简后繁）；每模块需要的数据在 **handlers** 里用内存 store 或 **fixture** 模拟。  
 3. ~~**`ProjectDashboard`（M08）**~~：**已完成（Mock）** — `GET …/dashboard` + 页面；后续与真服务对齐即可。  
 4. **设置三页**：AI / 个人 / 系统在 Mock 下 **可保存、可刷新仍生效**（推荐 **localStorage** 或 MSW **sessionStorage 式**内存，与后续真 API 字段对齐时再切换数据源）。  
 5. **契约同步**：每增加 Mock 行为，更新 **`openapi.yaml`**（含 request/response schema），避免与真后端对接时再大改。  
 6. **体验与工程（穿插）**：项目改名后 **顶栏项目名同步**；可选 **`openapi-typescript`** 生成类型，减轻 `api-contract.ts` 手写负担。  
-7. **Mock 验收通过后**：再执行 **`dev:api` 联调 PMP_Service**、Agent 接入（与旧版「先接后端」顺序对调）。
+7. **Mock 验收通过后**：再执行 **`dev:api` 联调 PMP_Service**、Agent 接入（与旧版「先接后端」顺序对调）。  
 
 ---
 
@@ -148,6 +149,7 @@
 | 2026-03-22 | **CONTINUE_PROMPT.md** 与本文对齐：复制区含 Mock 优先与 HANDOFF 引用；§2 表格更新对该文件描述。 |
 | 2026-03-22 | **REQ-M08 Dashboard**：OpenAPI + MSW + `ProjectDashboard.vue`；§4.4/§5/§6 同步。 |
 | 2026-03-22 | **顶栏**：`AppHeaderBar` 面包屑全路径 + 返回箭头；`headerBreadcrumbs.ts`；§4.2 更新。 |
+| 2026-03-22 | **REQ-M02**：需求文档 AI 辅助 diff MVP + 对话长期记忆（project+version）与接受/回退后上下文截断。 |
 
 ---
 

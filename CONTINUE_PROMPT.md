@@ -17,6 +17,8 @@
 - **MSW Mock 优先**：日常用 **`cd PMP_Web && npm run dev:mock`**；在 **不接 PMP_Service** 的前提下把前端路径做完整。
 - 新能力：**先扩 `contracts/openapi/openapi.yaml`，再补 `PMP_Web/src/mocks/handlers.ts`**；改界面同步 **`PMP_Web/docs/FEATURES.md`** §7。
 - Mock 验收通过后，再 **`dev:api` 联调** 与 Agent。
+- 当前进展：**REQ-M02 已实现** 需求文档列表/详情/版本机制 + AI diff MVP，并具备对话长期记忆（project+version）与接受/回退后上下文截断。
+- 下一步：按 **`AI_AGENT_PM_HANDOFF.md` §6**，明天从 **`PMP_Req_V2/00-技术规划`（TECH-001～005）** 的技术设计页面开始。
 
 **需求与实现依据**
 
