@@ -106,7 +106,7 @@
 - **数据**：**`GET /api/v1/projects/{projectId}/dashboard?iteration_key=`**（`current` | `all` | 具体迭代 id），契约与 **`contracts/openapi/openapi.yaml` v0.2.8** 中 `ProjectDashboardData` 对齐；卡片可含 **`charts[]`**（`DashboardChartSpec.option` 为 ECharts JSON）。开发环境由 **MSW**（`handlers.ts` + `buildProjectDashboard.ts` + `dashboardChartOptions.ts`）返回演示数据。
 - **迭代筛选**：顶栏下第一行 **迭代范围** 下拉——**全部迭代**、**当前迭代**、以及接口返回的迭代列表；切换后 **重新请求** Dashboard，**范围说明**（`scope_label`）随响应更新。
 - **布局**：指标区 **`grid` 一行两列**、**宽度随 `el-main` 撑满**（窄屏单列）；`ProjectLayout` 主区 **`min-width:0` + `width:100%`** 避免右侧空白。
-- **图表**：**`el-carousel`** 轮播（**左右箭头 + 下方指示点**），单页大图高约 **208px**；**点击当前图** → **`el-dialog` 放大**。**「查看」** 统一在卡片 **`footer` 右下角**（`router.push` 下钻）。
+- **图表**：**`el-carousel`** 轮播（**左右箭头 + 下方指示点**），单页大图高约 **208px**；**点击当前图** → **`el-dialog` 放大**。**「查看」** 在指标卡 **`header` 标题栏最右侧**（`router.push` 下钻），无底部 footer 条。
 - **扩展卡片**：**完成时间预测**（`completion_forecast`：累计完成度 + 预测折线、周吞吐柱+线）；**计划与里程碑**（`milestones_plan_actual`：**散点** 计划日 vs 实际日 + **参考对角线**；**柱+线** 计划工期 vs 实际工期及偏差线）。另含 REQ-M08 原有：迭代进度、Task、阻塞、人力、CR、质量、可选接口卡。
 - **风险与关注（§5）**：表格展示 `risk_items`（Mock 已按优先级排序）；**示例项目 Alpha**（`proj-demo-1`）数据较完整，其它项目为 **推导演示**。
 - **AI（§7）**：**AI：本周摘要** 打开抽屉，调用 **`POST /api/v1/ai/invoke`**，`capability: dashboard_weekly_summary`（MSW 返回固定短文）；**不写入业务数据**，用户可复制。
@@ -146,7 +146,7 @@
 | 2026-03-22 | **顶栏**：`AppHeaderBar` 改为 **返回箭头 + 全路径面包屑**（可点任意一级）；`headerBreadcrumbs.ts`；项目内保留 **切换项目**。 |
 | 2026-03-22 | 项目内 **切换项目**：由仅图标改为 **图标 +「切换项目」** 文案（`AppHeaderBar`）。 |
 | 2026-03-23 | **Dashboard**：一行两列卡片；各卡 **双 ECharts**；点击 **弹窗放大**；新增 **完成预测**、**计划与里程碑**（散点+柱线）；契约 **v0.2.8** `DashboardChartSpec`；`echarts` + `dashboardChartOptions.ts`。 |
-| 2026-03-23 | Dashboard：**主区撑满**；图表改 **轮播+指示点**；**查看** 固定 **卡片 footer 右下**。 |
+| 2026-03-23 | Dashboard：**主区撑满**；图表改 **轮播+指示点**；**查看** 在 **卡片标题栏右侧**（无底部栏）。 |
 | 2026-03-23 | **`el-main` 左右留白**：`ProjectLayout` / `WorkbenchLayout` 主区 **`padding: 16px 50px`**（上下 16、左右 50）。 |
 | 2026-03-23 | Dashboard：轮播区 **318px**；图 **`fill` + ResizeObserver** 撑满标题与「点击放大」之间高度（卡片主区两列满宽）。 |
 

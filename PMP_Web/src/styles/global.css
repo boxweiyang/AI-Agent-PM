@@ -48,3 +48,28 @@ html:not(.dark) .login-page {
     radial-gradient(800px 480px at 96% 28%, var(--el-fill-color-light), transparent 55%),
     var(--el-bg-color-page);
 }
+
+/**
+ * 暗色模式：提高悬停/填充与背景的对比度（EP 默认偏 subtle）
+ */
+html.dark {
+  --el-menu-hover-bg-color: color-mix(in srgb, var(--el-color-primary) 24%, var(--el-fill-color-blank));
+  --el-menu-active-color: var(--el-color-primary-light-3);
+  --el-fill-color-light: #343a46;
+  --el-fill-color-lighter: #2f343f;
+  --el-fill-color-extra-light: #2a2f3a;
+  --el-table-row-hover-bg-color: color-mix(in srgb, var(--el-color-primary) 14%, var(--el-fill-color-blank));
+}
+
+html.dark .el-button.is-text:not(.is-disabled):hover,
+html.dark .el-button.is-link:not(.is-disabled):hover {
+  background-color: color-mix(in srgb, var(--el-color-primary) 12%, transparent) !important;
+}
+
+html.dark .el-collapse-item__header:hover {
+  background-color: var(--el-fill-color-light) !important;
+}
+
+html.dark .el-card {
+  --el-card-border-color: var(--el-border-color-darker);
+}

@@ -1,6 +1,6 @@
 <!--
   REQ-M08：项目内首屏 Dashboard；数据来自 GET /api/v1/projects/:id/dashboard（MSW 演示）。
-  卡片两列、宽度随主区；图表轮播加高；点击放大；「查看」在卡片右下角。
+  卡片两列、宽度随主区；图表轮播加高；点击放大；「查看」在卡片标题栏右侧。
 -->
 <template>
   <div class="proj-dash" v-loading="loading">
@@ -45,8 +45,19 @@
       <el-card v-for="card in cards" :key="card.kind" class="metric-card" shadow="never">
         <template #header>
           <div class="card-head">
-            <span>{{ card.title }}</span>
-            <el-tag size="small" type="info" effect="plain">{{ cardKindLabel(card.kind) }}</el-tag>
+            <div class="card-head-left">
+              <span class="card-head-title">{{ card.title }}</span>
+              <el-tag size="small" type="info" effect="plain">{{ cardKindLabel(card.kind) }}</el-tag>
+            </div>
+            <el-button
+              v-if="card.drill?.route_name"
+              type="primary"
+              link
+              class="card-head-drill"
+              @click.stop="drill(card)"
+            >
+              查看
+            </el-button>
           </div>
         </template>
 
@@ -86,11 +97,6 @@
           </el-carousel>
         </div>
 
-        <template v-if="card.drill?.route_name" #footer>
-          <div class="card-footer-drill">
-            <el-button type="primary" link @click="drill(card)">查看</el-button>
-          </div>
-        </template>
       </el-card>
     </div>
 
@@ -432,11 +438,6 @@ watch(
   padding: 12px 16px;
 }
 
-.metric-card :deep(.el-card__footer) {
-  padding: 8px 16px 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
-}
-
 .card-inner {
   flex: 1;
   display: flex;
@@ -446,20 +447,33 @@ watch(
   min-width: 0;
 }
 
-.card-footer-drill {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  width: 100%;
-}
-
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   font-weight: 600;
   font-size: 15px;
+}
+
+.card-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.card-head-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-head-drill {
+  flex-shrink: 0;
+  font-weight: 500;
 }
 
 .card-head-inline {
@@ -522,6 +536,30 @@ watch(
   margin-top: 10px;
 }
 
+/* 为左右箭头留出槽位，避免压在图表上；箭头缩进贴边 */
+.dash-carousel :deep(.el-carousel__arrow) {
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--el-bg-color-page) 88%, var(--el-text-color-primary));
+  color: var(--el-text-color-regular);
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 12%, transparent);
+}
+
+.dash-carousel :deep(.el-carousel__arrow:hover) {
+  background: color-mix(in srgb, var(--el-color-primary) 22%, var(--el-bg-color-page));
+  color: var(--el-color-primary);
+}
+
+.dash-carousel :deep(.el-carousel__arrow--left) {
+  left: 6px;
+}
+
+.dash-carousel :deep(.el-carousel__arrow--right) {
+  right: 6px;
+}
+
 .chart-slide {
   display: flex;
   flex-direction: column;
@@ -529,7 +567,8 @@ watch(
   width: 100%;
   height: 100%;
   margin: 0;
-  padding: 10px 12px 8px;
+  /* 左右加宽：30px 箭头 + 边距，避免压在图表上 */
+  padding: 10px 52px 8px;
   box-sizing: border-box;
   border: none;
   background: transparent;
@@ -595,6 +634,19 @@ watch(
 
 .drawer-ta {
   font-family: inherit;
+}
+
+/* 暗色：轮播箭头与悬停对比更明显 */
+html.dark .dash-carousel :deep(.el-carousel__arrow) {
+  background: color-mix(in srgb, var(--el-fill-color) 92%, var(--el-text-color-primary));
+  color: var(--el-text-color-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-border-color) 80%, transparent);
+}
+
+html.dark .dash-carousel :deep(.el-carousel__arrow:hover) {
+  background: color-mix(in srgb, var(--el-color-primary) 38%, var(--el-fill-color));
+  color: var(--el-color-primary-light-3);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 50%, transparent);
 }
 </style>
 

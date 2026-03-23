@@ -25,7 +25,7 @@
           <div v-show="sidebarMode === 'full'" class="project-aside-sub" :title="projectDisplayName">
             {{ projectDisplayName }}
           </div>
-          <el-scrollbar class="aside-scroll">
+          <el-scrollbar class="aside-scroll" :wrap-style="asideScrollbarWrapStyle">
             <el-menu
               :default-active="activeMenuPath"
               class="project-menu"
@@ -121,12 +121,17 @@ const contextProjectTitle = computed(() => {
   return projectId.value ? `项目 ${projectId.value}` : '—'
 })
 
-/** 仅图标模式略窄于 EP 默认 64，更紧凑；与下方菜单宽度覆盖配套 */
+/** 仅图标模式略窄于 EP 默认 64，更紧凑；与 `--el-menu-base-level-padding` 配套使折叠宽=52 */
 const asideWidthPx = computed(() => {
   if (sidebarMode.value === 'full') return 220
   if (sidebarMode.value === 'icons') return 52
   return 0
 })
+
+/** 折叠菜单曾比侧栏宽约 12px（EP 默认 64 vs 52），scrollbar wrap 的 overflow:auto 会出横向滚动条 */
+const asideScrollbarWrapStyle = computed(() =>
+  sidebarMode.value === 'icons' ? { overflowX: 'hidden', overflowY: 'auto' } : undefined,
+)
 
 const toggleTooltip = computed(() => {
   if (sidebarMode.value === 'full') return '收起到仅图标'
@@ -207,7 +212,9 @@ async function onLogout() {
   height: 100%;
   min-height: 100vh;
   overflow: hidden;
-  border-right: 1px solid var(--el-border-color);
+  /* 不用 border-right：border 占盒内宽，52px 总宽时内容区只有 51px，仍触发横向滚动 */
+  border-right: none;
+  box-shadow: 1px 0 0 0 var(--el-border-color);
   box-sizing: border-box;
   background: var(--el-menu-bg-color);
 }
@@ -216,6 +223,17 @@ async function onLogout() {
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
+}
+
+/* 仅图标：禁止横向溢出与滚动条（EP 菜单/滚动容器常比 52px 略宽一截） */
+.aside-panel--icons {
+  overflow-x: hidden;
+}
+
+.aside-panel--icons .project-aside {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .project-aside {
@@ -272,9 +290,32 @@ async function onLogout() {
   min-height: 0;
 }
 
+.aside-panel--icons .aside-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* el-scrollbar 内层按内容宽度撑开时会出横向滚动条，强制只纵向滚动 */
+.aside-panel--icons .aside-scroll:deep(.el-scrollbar__wrap) {
+  overflow-x: hidden !important;
+}
+
+.aside-panel--icons .aside-scroll:deep(.el-scrollbar__view) {
+  max-width: 100%;
+}
+
 .project-menu {
   border-right: none;
   background: transparent;
+}
+
+/*
+ * EP 折叠宽度 = --el-menu-icon-width(24) + 2 * --el-menu-base-level-padding（默认 20→总宽 64）。
+ * 侧栏仅 52px 时必须把 base padding 调到 14，否则菜单比壳宽 → 横向滚动条 + 图标看起来不居中。
+ */
+.aside-panel--icons .project-menu {
+  --el-menu-base-level-padding: 14px;
 }
 
 /*
@@ -290,35 +331,14 @@ async function onLogout() {
   overflow: hidden !important;
 }
 
-/* 折叠菜单：整行与触发器均水平居中，去掉 EP 为文字预留的左右不对称 padding */
-.aside-panel--icons .project-menu:deep(.el-menu.el-menu--collapse) {
-  width: 52px !important;
-}
-
-.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item) {
+.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item-group > ul) {
   padding: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  margin: 0 !important;
+  width: 100%;
 }
 
-.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item .el-menu-tooltip__trigger) {
-  display: flex !important;
-  width: 100% !important;
-  min-height: 56px;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0 !important;
-  box-sizing: border-box;
-}
-
-.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item .el-icon) {
-  margin-right: 0 !important;
-  margin-left: 0 !important;
-}
-
-.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item .el-icon svg) {
-  display: block;
+.aside-panel--icons .project-menu:deep(.el-menu--collapse .el-menu-item-group) {
+  border: none;
 }
 
 /* 腰钮：左缘与侧栏右缘对齐（不压菜单），仅纵向居中；无左边框，与菜单右边框共用一条分界 */
