@@ -1,6 +1,6 @@
 <!--
   REQ-M08：项目内首屏 Dashboard；数据来自 GET /api/v1/projects/:id/dashboard（MSW 演示）。
-  卡片两列、宽度随主区；图表轮播加高；点击放大；「查看」在卡片标题栏右侧。
+  风险与关注卡置顶；指标卡两列、宽度随主区；图表轮播加高；点击放大；「查看」在卡片标题栏右侧。
 -->
 <template>
   <div class="proj-dash" v-loading="loading">
@@ -40,6 +40,25 @@
       :title="loadError"
       class="dash-alert"
     />
+
+    <el-card v-if="!loadError && riskItems.length" class="risk-card" shadow="never">
+      <template #header>
+        <div class="card-head-inline">
+          <span>风险与关注</span>
+          <el-tag size="small" type="warning">REQ-M08 §5</el-tag>
+        </div>
+      </template>
+      <p class="risk-lead">阻塞 Task、高优缺陷、待评审 CR、驳回提测等（Mock 数据已排序）。</p>
+      <el-table :data="riskItems" stripe size="small" class="risk-table">
+        <el-table-column label="类型" width="120">
+          <template #default="{ row }">
+            <el-tag size="small" :type="riskTagType(row.kind)">{{ riskKindLabel(row.kind) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="title" label="标题" min-width="200" />
+        <el-table-column prop="subtitle" label="说明" min-width="220" />
+      </el-table>
+    </el-card>
 
     <div v-if="!loadError && cards.length" class="card-grid">
       <el-card v-for="card in cards" :key="card.kind" class="metric-card" shadow="never">
@@ -99,25 +118,6 @@
 
       </el-card>
     </div>
-
-    <el-card v-if="!loadError && riskItems.length" class="risk-card" shadow="never">
-      <template #header>
-        <div class="card-head-inline">
-          <span>风险与关注</span>
-          <el-tag size="small" type="warning">REQ-M08 §5</el-tag>
-        </div>
-      </template>
-      <p class="risk-lead">阻塞 Task、高优缺陷、待评审 CR、驳回提测等（Mock 数据已排序）。</p>
-      <el-table :data="riskItems" stripe size="small" class="risk-table">
-        <el-table-column label="类型" width="120">
-          <template #default="{ row }">
-            <el-tag size="small" :type="riskTagType(row.kind)">{{ riskKindLabel(row.kind) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="title" label="标题" min-width="200" />
-        <el-table-column prop="subtitle" label="说明" min-width="220" />
-      </el-table>
-    </el-card>
 
     <el-empty v-if="!loading && !loadError && !cards.length" description="暂无 Dashboard 数据" />
 
@@ -607,7 +607,7 @@ watch(
 }
 
 .risk-card {
-  margin-top: 0;
+  margin: 0 0 16px;
   width: 100%;
 }
 
