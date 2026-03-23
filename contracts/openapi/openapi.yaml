@@ -5,7 +5,7 @@ info:
     前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
 
     **鉴权（V1）**：账号密码登录；Access JWT（Bearer）；Refresh 见 TECH-004（实现可选 Cookie HttpOnly；契约中 Body 字段保留作备选）。
-  version: 0.2.8-draft
+  version: 0.2.9-draft
 
 servers:
   - url: http://127.0.0.1:8000
@@ -20,6 +20,8 @@ tags:
     description: 项目列表与立项入口（M01/M09）
   - name: ai
     description: AI 网关（经 ai_gateway；Agent 能力键 capability）
+  - name: requirement-doc
+    description: REQ-M02 需求文档 Markdown 版本列表与编辑
 
 paths:
   /api/v1/health:
@@ -263,6 +265,196 @@ paths:
                 $ref: "#/components/schemas/EnvelopeProjectDashboard"
         "401":
           description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/requirement-doc/versions:
+    get:
+      tags: [requirement-doc]
+      summary: 需求文档版本列表
+      description: |
+        按 `version_no` 升序返回；`latest_version_id` 为当前链上最新一条（删除最新后自动指向前一条）。
+        无版本时 `items` 为空、`latest_version_id` 为 null。
+      operationId: listRequirementDocVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    post:
+      tags: [requirement-doc]
+      summary: 创建需求文档版本
+      description: |
+        - `mode=empty`：首版或任意时刻新建空模板。
+        - `mode=from_latest`：复制当前 **最新版** 正文生成新版本（列表页「创建」）；若无版本则与 `empty` 等价。
+        - `markdown` + `based_on_version_id`：**保存为新版**；`based_on_version_id` 须等于当前最新版 id，否则业务错误（仅允许从最新版分叉出新版本）。
+      operationId: postRequirementDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionCreateOrAppend"
+      responses:
+        "200":
+          description: 成功，返回新建或更新后的版本详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "400":
+          description: 参数错误或 based_on 非最新
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/requirement-doc/versions/{versionId}:
+    get:
+      tags: [requirement-doc]
+      summary: 获取指定版本详情（Markdown 全文）
+      operationId: getRequirementDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 版本不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    patch:
+      tags: [requirement-doc]
+      summary: 覆盖当前版本正文（不产生新版本）
+      description: |
+        **仅当 `versionId` 为当前最新版本时允许**；否则返回业务错误。用于用户选择「覆盖当前版本」保存。
+      operationId: patchRequirementDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "400":
+          description: 非最新版本禁止覆盖
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    delete:
+      tags: [requirement-doc]
+      summary: 删除指定版本
+      description: 删除后 `latest_version_id` 为剩余版本中 `version_no` 最大者。
+      operationId: deleteRequirementDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 版本不存在
           content:
             application/json:
               schema:
@@ -815,6 +1007,88 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/ProjectDashboardData"
+
+    RequirementDocVersionListItem:
+      type: object
+      required: [id, version_no, created_at, preview]
+      properties:
+        id:
+          type: string
+        version_no:
+          type: integer
+          minimum: 1
+        created_at:
+          type: string
+          format: date-time
+        preview:
+          type: string
+          description: 正文首行或摘要，供列表展示
+
+    RequirementDocVersionListData:
+      type: object
+      required: [items, latest_version_id]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementDocVersionListItem"
+        latest_version_id:
+          type: string
+          nullable: true
+
+    RequirementDocVersionDetail:
+      type: object
+      required: [id, version_no, markdown, is_latest, created_at]
+      properties:
+        id:
+          type: string
+        version_no:
+          type: integer
+          minimum: 1
+        markdown:
+          type: string
+          description: Markdown 正文
+        is_latest:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    RequirementDocVersionCreateOrAppend:
+      type: object
+      description: |
+        三选一：`mode`（列表页创建）、或 `markdown`+`based_on_version_id`（详情页保存为新版本）。
+      properties:
+        mode:
+          type: string
+          enum: [empty, from_latest]
+        markdown:
+          type: string
+        based_on_version_id:
+          type: string
+
+    RequirementDocVersionPatchBody:
+      type: object
+      required: [markdown]
+      properties:
+        markdown:
+          type: string
+
+    EnvelopeRequirementDocVersionList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/RequirementDocVersionListData"
+
+    EnvelopeRequirementDocVersionDetail:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/RequirementDocVersionDetail"
 
     AiInvokeRequest:
       type: object

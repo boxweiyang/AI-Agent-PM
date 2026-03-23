@@ -50,7 +50,9 @@
 | `/projects/:projectId` | （重定向） | `ProjectLayout` → 默认 **`/dashboard`** | — |
 | `/projects/:projectId/dashboard` | 项目 Dashboard | `ProjectLayout` + `ProjectDashboard.vue` | REQ-M08：`GET …/dashboard` + MSW；迭代筛选、指标卡片、风险列表、下钻、AI 摘要抽屉（Mock） |
 | `/projects/:projectId/detail` | 项目详情 | `ProjectLayout` + `ProjectDetail.vue` | M01、可编辑、模块入口 |
-| `/projects/:projectId/m02/requirements` 等 | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02～M11；`artifacts` 驱动已生成/去生成 |
+| `/projects/:projectId/m02/requirements` | 需求与文档（版本列表） | `ProjectLayout` + `requirements/RequirementDocListPage.vue` | REQ-M02；`GET/POST/DELETE …/requirement-doc/versions` + MSW；导出 MD/HTML/PDF（打印） |
+| `/projects/:projectId/m02/requirements/versions/:versionId` | 需求文档版本详情 | `ProjectLayout` + `requirements/RequirementDocVersionDetailPage.vue` | Markdown 编辑/预览切换；保存弹窗 **新建版本 / 覆盖**；仅 **最新** 可保存 |
+| `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02B～M11；`artifacts` 驱动已生成/去生成 |
 
 ---
 
@@ -103,7 +105,7 @@
 
 ## 6.1.1 `/projects/:projectId/dashboard` 项目 Dashboard（首屏）
 
-- **数据**：**`GET /api/v1/projects/{projectId}/dashboard?iteration_key=`**（`current` | `all` | 具体迭代 id），契约与 **`contracts/openapi/openapi.yaml` v0.2.8** 中 `ProjectDashboardData` 对齐；卡片可含 **`charts[]`**（`DashboardChartSpec.option` 为 ECharts JSON）。开发环境由 **MSW**（`handlers.ts` + `buildProjectDashboard.ts` + `dashboardChartOptions.ts`）返回演示数据。
+- **数据**：**`GET /api/v1/projects/{projectId}/dashboard?iteration_key=`**（`current` | `all` | 具体迭代 id），契约与 **`contracts/openapi/openapi.yaml` v0.2.9** 中 `ProjectDashboardData` 对齐；卡片可含 **`charts[]`**（`DashboardChartSpec.option` 为 ECharts JSON）。开发环境由 **MSW**（`handlers.ts` + `buildProjectDashboard.ts` + `dashboardChartOptions.ts`）返回演示数据。
 - **迭代筛选**：顶栏下第一行 **迭代范围** 下拉——**全部迭代**、**当前迭代**、以及接口返回的迭代列表；切换后 **重新请求** Dashboard，**范围说明**（`scope_label`）随响应更新。
 - **布局**：指标区 **`grid` 一行两列**、**宽度随 `el-main` 撑满**（窄屏单列）；`ProjectLayout` 主区 **`min-width:0` + `width:100%`** 避免右侧空白。
 - **图表**：**`el-carousel`** 轮播（**左右箭头 + 下方指示点**），单页大图高约 **208px**；**点击当前图** → **`el-dialog` 放大**。**「查看」** 在指标卡 **`header` 标题栏最右侧**（`router.push` 下钻），无底部 footer 条。
@@ -112,9 +114,17 @@
 - **AI（§7）**：**AI：本周摘要** 打开抽屉，调用 **`POST /api/v1/ai/invoke`**，`capability: dashboard_weekly_summary`（MSW 返回固定短文）；**不写入业务数据**，用户可复制。
 - **其它**：**项目详情** 按钮跳转 `project-detail`；回项目列表用顶栏 **切换图标**。
 
-## 6.1.2 项目内模块占位页
+## 6.1.2 `/projects/:projectId/m02/requirements` 需求与文档（REQ-M02，V1）
 
-- **路径**：`/projects/:projectId/<模块路径>`（如 `m02/requirements`）。
+- **入口**：侧栏 **需求与文档** → **版本列表**（非直接进入长文档编辑）。
+- **契约**：**`contracts/openapi/openapi.yaml` v0.2.9** `…/requirement-doc/versions`；MSW 见 **`handlers.ts`** + **`mocks/requirementDocStore.ts`**（`proj-demo-1` 预置两版示例）。
+- **列表**：表格展示 `version_no`、时间、摘要；**打开** 进详情；**每行导出** MD / HTML / **PDF（新窗口打印为 PDF）**；**删除**（删最新后上一版成为最新）；**导出最新** 下拉；**创建首版** / **基于最新版创建** / **新建空白版本**（`POST` + `mode`）。
+- **详情**：**编辑 / 预览** 切换（`marked` 渲染）；**仅当前「最新」版本** 显示 **保存**；保存前 **`el-dialog`** 选 **新建版本**（`POST` + `markdown` + `based_on_version_id`）或 **覆盖当前版本**（`PATCH`）；历史版本 **只读** 可导出。
+- **`artifacts.req_doc`**：未生成时与占位页一致，**一键生成** 后可用上述接口。
+
+## 6.1.3 项目内模块占位页
+
+- **路径**：`/projects/:projectId/<模块路径>`（如 `m02b/design`）；**`m02/requirements` 已接真实页，不在此列**。
 - **已生成**（`artifacts[键]===true`）：成功态说明，后续可替换为真实工作台。
 - **未生成**：**一键生成（演示）** 调用 **PATCH** 合并 `artifacts`，再可进入已生成态；**返回项目详情** 回到概览。
 
@@ -149,6 +159,7 @@
 | 2026-03-23 | Dashboard：**主区撑满**；图表改 **轮播+指示点**；**查看** 在 **卡片标题栏右侧**（无底部栏）。 |
 | 2026-03-23 | **`el-main` 左右留白**：`ProjectLayout` / `WorkbenchLayout` 主区 **`padding: 16px 50px`**（上下 16、左右 50）。 |
 | 2026-03-23 | Dashboard：轮播区 **318px**；图 **`fill` + ResizeObserver** 撑满标题与「点击放大」之间高度（卡片主区两列满宽）。 |
+| 2026-03-23 | **REQ-M02 需求与文档**：版本列表 + 详情编辑/预览；保存弹窗 **新建/覆盖**；仅最新可保存；列表与详情 **导出 MD/HTML/PDF（打印）**；OpenAPI **v0.2.9** + MSW `requirementDocStore`。 |
 
 ---
 

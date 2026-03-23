@@ -189,3 +189,37 @@ export type ProjectDashboardData = {
   cards: DashboardCard[]
   risk_items: DashboardRiskItem[]
 }
+
+/** GET …/requirement-doc/versions */
+export type RequirementDocVersionListItem = {
+  id: string
+  version_no: number
+  created_at: string
+  preview: string
+}
+
+export type RequirementDocVersionListData = {
+  items: RequirementDocVersionListItem[]
+  latest_version_id: string | null
+}
+
+/** GET/PATCH/POST 返回的单条详情 */
+export type RequirementDocVersionDetail = {
+  id: string
+  version_no: number
+  markdown: string
+  is_latest: boolean
+  created_at: string
+}
+
+/** POST …/versions：列表创建 或 详情保存为新版本 */
+export type RequirementDocVersionCreateOrAppendBody = {
+  mode?: 'empty' | 'from_latest'
+  markdown?: string
+  based_on_version_id?: string
+}
+
+/** PATCH …/versions/{id} */
+export type RequirementDocVersionPatchBody = {
+  markdown: string
+}

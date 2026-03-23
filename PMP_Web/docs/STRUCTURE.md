@@ -43,8 +43,10 @@
 | `src/config/projectRelatedModules.ts` | **项目内**模块路由清单（与 `artifacts` 键对齐；由 `projectLayoutRoutes.ts` 注册） |
 | `src/features/auth/pages/Login.vue` | 登录页（Mock：`admin` / 任意密码） |
 | `src/features/workspace/routes.ts` | **工作台子路由**：`/`、`/projects`、`/enter-last-project`、`/settings/*`（挂到 `/` 下） |
-| `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：默认 Dashboard、`detail`、各 `m0x/...` 占位 |
-| `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue`、`components/DashboardEchart.vue` |
+| `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：默认 Dashboard、`detail`、**`m02/requirements`（列表+详情）**、其余 `m0x/...` 占位 |
+| `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`pages/requirements/*`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue`、`components/DashboardEchart.vue` |
+| `src/utils/requirementDocExport.ts` | 需求文档 **导出 MD/HTML** 与 **打印为 PDF**（`marked`） |
+| `src/mocks/requirementDocStore.ts` | MSW 内存：**需求文档版本**链（最新判定、预置 `proj-demo-1` 示例） |
 | `src/features/workspace/dashboardChartOptions.ts` | Dashboard **ECharts option** 生成（Mock），由 `buildProjectDashboard` 组装进 `cards[].charts` |
 | `echarts`（`package.json`） | Dashboard 卡片内图表（core 按需注册于 `DashboardEchart.vue`） |
 | `src/features/workspace/pages/ProjectDetail.vue` | 项目详情（`.../detail`；GET/PATCH 单项目） |

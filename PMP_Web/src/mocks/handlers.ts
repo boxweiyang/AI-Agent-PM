@@ -6,6 +6,15 @@
 import { http, HttpResponse } from 'msw'
 
 import { buildProjectDashboard } from '@/mocks/buildProjectDashboard'
+import {
+  appendRequirementDocVersion,
+  createRequirementDocVersion,
+  deleteRequirementDocVersion,
+  getRequirementDocVersion,
+  listRequirementDocVersions,
+  patchRequirementDocVersion,
+} from '@/mocks/requirementDocStore'
+import type { RequirementDocVersionCreateOrAppendBody } from '@/types/api-contract'
 
 type AiInvokeBody = {
   capability?: string
@@ -372,6 +381,164 @@ export const handlers = [
       code: 0,
       message: 'ok',
       data: buildProjectDashboard(iterationKey, row),
+    })
+  }),
+
+  /** REQ-M02：需求文档 Markdown 版本列表 */
+  http.get('/api/v1/projects/:projectId/requirement-doc/versions', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const raw = params.projectId
+    const id = typeof raw === 'string' ? raw : raw?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === id)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: listRequirementDocVersions(id),
+    })
+  }),
+
+  /** 创建版本（列表：mode）或保存为新版本（详情：markdown + based_on_version_id） */
+  http.post('/api/v1/projects/:projectId/requirement-doc/versions', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const raw = params.projectId
+    const projectId = typeof raw === 'string' ? raw : raw?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let body: RequirementDocVersionCreateOrAppendBody = {}
+    try {
+      body = (await request.json()) as RequirementDocVersionCreateOrAppendBody
+    } catch {
+      /* ignore */
+    }
+    if (typeof body.markdown === 'string' && typeof body.based_on_version_id === 'string') {
+      const r = appendRequirementDocVersion(projectId, body.markdown, body.based_on_version_id)
+      if (!r.ok) {
+        return HttpResponse.json({ code: 40002, message: r.message, data: null })
+      }
+      const row = r.row
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    if (body.mode === 'empty' || body.mode === 'from_latest') {
+      const row = createRequirementDocVersion(projectId, body.mode)
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    return HttpResponse.json({
+      code: 40001,
+      message: '请求体需包含 mode（empty|from_latest）或 markdown + based_on_version_id',
+      data: null,
+    })
+  }),
+
+  http.get('/api/v1/projects/:projectId/requirement-doc/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const rawP = params.projectId
+    const projectId = typeof rawP === 'string' ? rawP : rawP?.[0] ?? ''
+    const rawV = params.versionId
+    const versionId = typeof rawV === 'string' ? rawV : rawV?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const row = getRequirementDocVersion(projectId, versionId)
+    if (!row) {
+      return HttpResponse.json({ code: 40402, message: '版本不存在', data: null })
+    }
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/requirement-doc/versions/:versionId', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const rawP = params.projectId
+    const projectId = typeof rawP === 'string' ? rawP : rawP?.[0] ?? ''
+    const rawV = params.versionId
+    const versionId = typeof rawV === 'string' ? rawV : rawV?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let markdown = ''
+    try {
+      const b = (await request.json()) as { markdown?: string }
+      markdown = typeof b.markdown === 'string' ? b.markdown : ''
+    } catch {
+      /* ignore */
+    }
+    const r = patchRequirementDocVersion(projectId, versionId, markdown)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40003, message: r.message, data: null })
+    }
+    const row = r.row
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/requirement-doc/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const rawP = params.projectId
+    const projectId = typeof rawP === 'string' ? rawP : rawP?.[0] ?? ''
+    const rawV = params.versionId
+    const versionId = typeof rawV === 'string' ? rawV : rawV?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const r = deleteRequirementDocVersion(projectId, versionId)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40402, message: r.message, data: null })
+    }
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: listRequirementDocVersions(projectId),
     })
   }),
 
