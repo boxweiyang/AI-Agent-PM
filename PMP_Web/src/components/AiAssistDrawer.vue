@@ -1,18 +1,20 @@
 <template>
   <el-drawer
     :model-value="modelValue"
-    :title="title"
     size="460px"
     destroy-on-close
     @update:model-value="onUpdateModelValue"
     @open="onOpen"
   >
-    <p class="ai-hint">{{ description }}</p>
-
-    <el-radio-group v-model="mode" class="ai-mode">
-      <el-radio-button label="builtin">站内 AI</el-radio-button>
-      <el-radio-button label="external">外置 AI 回填</el-radio-button>
-    </el-radio-group>
+    <template #title>
+      <div class="drawer-title">
+        <span class="drawer-title-text">{{ title }}</span>
+        <el-radio-group v-model="mode" size="small" class="drawer-tabs">
+          <el-radio-button label="builtin">站内 AI</el-radio-button>
+          <el-radio-button label="external">外置 AI 回填</el-radio-button>
+        </el-radio-group>
+      </div>
+    </template>
 
     <div v-if="mode === 'builtin'" class="chat-body">
       <div ref="historyEl" class="chat-history">
@@ -24,8 +26,16 @@
         >
           <div class="chat-bubble">
             <div class="chat-content">
-              {{ m.content }}
-              <span v-if="m.streaming" class="chat-cursor">|</span>
+              <template v-if="m.waiting">
+                <span class="wait-dots">···</span>
+                <span class="wait-spinner" aria-hidden="true">
+                  <span class="wait-spinner-dot" />
+                </span>
+              </template>
+              <template v-else>
+                {{ m.content }}
+                <span v-if="m.streaming" class="chat-cursor">|</span>
+              </template>
             </div>
           </div>
         </div>
@@ -93,6 +103,7 @@ const props = withDefaults(
     defaultPrompt?: string
     externalPrompt?: string
     payloadBase?: Record<string, unknown>
+    memoryKey?: string
   }>(),
   {
     title: 'AI 辅助',
@@ -100,6 +111,7 @@ const props = withDefaults(
     defaultPrompt: '',
     externalPrompt: '',
     payloadBase: () => ({}),
+    memoryKey: '',
   },
 )
 
@@ -114,6 +126,7 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   streaming?: boolean
+  waiting?: boolean
 }
 
 const mode = ref<'builtin' | 'external'>('builtin')
@@ -127,20 +140,81 @@ const sending = ref(false)
 const generatingDoc = ref(false)
 const assistantStreamTimer = ref<number | null>(null)
 
+const MEMORY_PREFIX = 'pmp_ai_assist_history:'
+
+function getMemoryStorageKey(): string {
+  const k = props.memoryKey?.trim()
+  if (!k) return ''
+  return `${MEMORY_PREFIX}${k}`
+}
+
+function loadHistoryFromMemory() {
+  const storageKey = getMemoryStorageKey()
+  if (!storageKey) return
+  if (typeof window === 'undefined') return
+
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return
+
+    const restored: ChatMessage[] = (parsed as Array<unknown>).map((x) => {
+      const r = x as Partial<ChatMessage> | null
+      const role: ChatMessage['role'] = r?.role === 'user' ? 'user' : 'assistant'
+      return {
+        id: typeof r?.id === 'string' ? r.id : nextId('m'),
+        role,
+        content: typeof r?.content === 'string' ? r.content : '',
+        streaming: false,
+        waiting: false,
+      }
+    })
+
+    messages.value = restored.filter((m) => m.content.trim().length > 0)
+  } catch {
+    // ignore memory errors
+  }
+}
+
+function persistHistoryToMemory() {
+  const storageKey = getMemoryStorageKey()
+  if (!storageKey) return
+  if (typeof window === 'undefined') return
+
+  try {
+    const rows = messages.value.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+    }))
+    window.localStorage.setItem(storageKey, JSON.stringify(rows))
+  } catch {
+    // ignore memory errors
+  }
+}
+
 function onUpdateModelValue(v: boolean) {
   emit('update:modelValue', v)
-  if (!v) hasInitedPrompt.value = false
+  if (!v) {
+    hasInitedPrompt.value = false
+    if (assistantStreamTimer.value) {
+      window.clearInterval(assistantStreamTimer.value)
+      assistantStreamTimer.value = null
+    }
+    persistHistoryToMemory()
+  }
 }
 
 function onOpen() {
-  if (!hasInitedPrompt.value) {
-    externalPromptText.value = (props.externalPrompt ?? props.defaultPrompt ?? '').trim()
-    messages.value = []
-    userInput.value = ''
-    sending.value = false
-    generatingDoc.value = false
-    hasInitedPrompt.value = true
-  }
+  externalPromptText.value = (props.externalPrompt ?? props.defaultPrompt ?? '').trim()
+  userInput.value = ''
+  sending.value = false
+  generatingDoc.value = false
+  hasInitedPrompt.value = true
+
+  // 每次打开都尝试加载长期记忆（按 project + version）
+  loadHistoryFromMemory()
 }
 
 watch(
@@ -193,7 +267,11 @@ async function invokeAi(action: 'chat' | 'generate_doc', message?: string) {
   return data.data ?? {}
 }
 
-function streamAssistantText(assistantId: string, fullText: string): Promise<void> {
+function streamAssistantText(
+  assistantId: string,
+  fullText: string,
+  onChunk?: (chunk: string) => void,
+): Promise<void> {
   const text = fullText ?? ''
   const m = messages.value.find((x) => x.id === assistantId)
   if (!m) return Promise.resolve()
@@ -214,6 +292,7 @@ function streamAssistantText(assistantId: string, fullText: string): Promise<voi
       const row = messages.value.find((x) => x.id === assistantId)
       if (!row) return
       row.content = text.slice(0, i)
+      onChunk?.(row.content)
 
       if (i >= len) {
         if (assistantStreamTimer.value) window.clearInterval(assistantStreamTimer.value)
@@ -267,12 +346,20 @@ async function generateDoc() {
   generatingDoc.value = true
   try {
     const assistantId = nextId('a')
-    messages.value.push({ id: assistantId, role: 'assistant', content: '', streaming: true })
+    messages.value.push({ id: assistantId, role: 'assistant', content: '', waiting: true })
     scrollToBottom()
 
     const resp = await invokeAi('generate_doc')
     const md = pickText(resp)
-    await streamAssistantText(assistantId, md)
+
+    const row = messages.value.find((x) => x.id === assistantId)
+    if (row) {
+      row.waiting = false
+      row.streaming = false
+      row.content = md
+    }
+
+    // md 一次性回填给编辑器；编辑器侧做打字动画（避免 drawer 关闭时打断动画）
     emit('apply', md)
     ElMessage.success('已生成并应用到正文')
     emit('update:modelValue', false)
@@ -314,8 +401,31 @@ async function copyExternalPrompt() {
   margin-bottom: 10px;
 }
 
+.drawer-title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.drawer-title-text {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.drawer-tabs {
+  margin-left: 20px;
+}
+
+.drawer-tabs :deep(.el-radio-button__inner) {
+  padding: 0 6px;
+  font-size: 11px;
+  height: 22px;
+  line-height: 22px;
+}
+
 .ai-sub-hint {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: var(--el-text-color-regular);
   font-size: 12px;
 }
@@ -323,10 +433,11 @@ async function copyExternalPrompt() {
 .ai-actions {
   display: flex;
   gap: 8px;
+  margin: 0 0 6px;
 }
 
 .chat-body {
-  height: calc(100% - 70px);
+  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -379,6 +490,35 @@ async function copyExternalPrompt() {
   animation: ai-cursor-blink 1s steps(2, start) infinite;
 }
 
+/* 等待图标（外部/生成中） */
+.wait-dots {
+  display: inline-block;
+  letter-spacing: 2px;
+  color: var(--el-text-color-secondary);
+}
+
+.wait-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+}
+
+.wait-spinner-dot {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--el-color-primary) 60%, transparent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ai-wait-spin 0.9s linear infinite;
+}
+
+@keyframes ai-wait-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes ai-cursor-blink {
   to {
     visibility: hidden;
@@ -387,7 +527,8 @@ async function copyExternalPrompt() {
 
 .chat-composer {
   border-top: 1px solid var(--el-border-color-lighter);
-  padding: 10px 12px;
+  padding: 8px 12px 0;
+  flex-shrink: 0;
 }
 
 .composer-top {
@@ -401,10 +542,13 @@ async function copyExternalPrompt() {
 .chat-input :deep(.el-textarea__inner) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   line-height: 1.5;
+  resize: vertical !important;
+  overflow: auto;
+  min-height: 72px;
 }
 
 .composer-bottom {
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .generate-doc-btn {
@@ -412,7 +556,7 @@ async function copyExternalPrompt() {
 }
 
 .external-body {
-  height: calc(100% - 70px);
+  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -421,6 +565,7 @@ async function copyExternalPrompt() {
 .external-prompt-input {
   flex: 1;
   min-height: 0;
+  margin-top: 0;
 }
 
 .external-prompt-input :deep(.el-textarea) {

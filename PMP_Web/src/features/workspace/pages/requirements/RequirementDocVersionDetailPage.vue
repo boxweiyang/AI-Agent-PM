@@ -98,11 +98,11 @@
     <AiAssistDrawer
       v-model="aiVisible"
       title="AI 辅助（需求文档）"
-      description="围绕当前文档与你的诉求生成建议，确认后再应用到正文。"
       capability="requirement_doc_assist"
       :default-prompt="defaultAiPrompt"
       :external-prompt="externalAiPrompt"
       :payload-base="aiPayloadBase"
+      :memory-key="aiMemoryKey"
       @apply="handleAiApply"
     />
   </div>
@@ -111,7 +111,7 @@
 <script setup lang="ts">
 import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { apiClient } from '@/api/client'
@@ -142,6 +142,7 @@ const markdown = ref('')
 const viewMode = ref<'edit' | 'preview'>('edit')
 const saveDialogVisible = ref(false)
 const aiVisible = ref(false)
+const typingTimer = ref<number | null>(null)
 
 const artifactKey = computed(() => (route.meta.artifactKey as string) ?? '')
 const reqRef = computed(() => (route.meta.reqRef as string) ?? '')
@@ -183,6 +184,13 @@ const aiPayloadBase = computed<Record<string, unknown>>(() => {
     version_no: detail.value?.version_no ?? 0,
     markdown: markdown.value,
   }
+})
+
+const aiMemoryKey = computed(() => {
+  const pid = typeof route.params.projectId === 'string' ? route.params.projectId : ''
+  const vid = detail.value?.id ?? ''
+  if (!pid || !vid) return ''
+  return `${pid}:${vid}:requirement_doc_assist`
 })
 
 function goList() {
@@ -308,13 +316,33 @@ function handleAiApply(text: string) {
     ElMessage.warning('历史版本不允许写入，请打开最新版本')
     return
   }
-  if (!markdown.value.trim()) {
-    markdown.value = text
-    viewMode.value = 'edit'
-    return
+
+  const full = text ?? ''
+  if (typingTimer.value) {
+    window.clearInterval(typingTimer.value)
+    typingTimer.value = null
   }
-  markdown.value = `${markdown.value.trim()}\n\n---\n\n${text}\n`
+
   viewMode.value = 'edit'
+  markdown.value = ''
+
+  const len = full.length
+  if (!len) return
+
+  const totalTicks = Math.min(240, Math.max(120, Math.ceil(len / 35)))
+  const step = Math.max(1, Math.ceil(len / totalTicks))
+
+  let i = 0
+  typingTimer.value = window.setInterval(() => {
+    i = Math.min(len, i + step)
+    markdown.value = full.slice(0, i)
+
+    if (i >= len) {
+      if (typingTimer.value) window.clearInterval(typingTimer.value)
+      typingTimer.value = null
+      markdown.value = full
+    }
+  }, 16)
 }
 
 watch(
@@ -324,6 +352,10 @@ watch(
   },
   { immediate: true },
 )
+
+onUnmounted(() => {
+  if (typingTimer.value) window.clearInterval(typingTimer.value)
+})
 </script>
 
 <style scoped>
