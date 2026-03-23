@@ -96,6 +96,7 @@
     </el-dialog>
 
     <AiAssistDrawer
+      ref="aiDrawerRef"
       v-model="aiVisible"
       title="AI 辅助（需求文档）"
       capability="requirement_doc_assist"
@@ -103,8 +104,37 @@
       :external-prompt="externalAiPrompt"
       :payload-base="aiPayloadBase"
       :memory-key="aiMemoryKey"
-      @apply="handleAiApply"
+      @apply="handleAiApplyWithMeta"
+      @propose="handleAiPropose"
     />
+
+    <el-dialog
+      v-model="diffDialogVisible"
+      title="差异对比"
+      width="920px"
+      destroy-on-close
+      :close-on-click-modal="false"
+      @closed="onDiffDialogClosed"
+    >
+      <p class="dialog-lead">AI 将在当前正文基础上做修改。请确认后选择接受或回退。</p>
+      <el-scrollbar height="520px" class="diff-scroll">
+        <div class="diff-lines">
+          <div
+            v-for="(d, idx) in diffLinesRender"
+            :key="idx"
+            class="diff-line"
+            :class="`is-${d.kind}`"
+          >
+            <span class="diff-prefix">{{ d.kind === 'add' ? '+' : d.kind === 'del' ? '-' : ' ' }}</span>
+            <span class="diff-text" :title="d.line">{{ d.line }}</span>
+          </div>
+        </div>
+      </el-scrollbar>
+      <template #footer>
+        <el-button @click="onRollbackDiff">回退</el-button>
+        <el-button type="primary" plain @click="onAcceptDiff">接受</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -143,6 +173,16 @@ const viewMode = ref<'edit' | 'preview'>('edit')
 const saveDialogVisible = ref(false)
 const aiVisible = ref(false)
 const typingTimer = ref<number | null>(null)
+
+const aiDrawerRef = ref<{ truncateHistoryToAssistantId: (id: string | null) => void } | null>(null)
+const lastAppliedAssistantId = ref<string | null>(null)
+
+const diffDialogVisible = ref(false)
+const diffOldMd = ref('')
+const diffNewMd = ref('')
+const proposedAssistantId = ref<string | null>(null)
+const diffLinesRender = ref<Array<{ kind: 'equal' | 'add' | 'del'; line: string }>>([])
+const diffAction = ref<'accept' | 'rollback' | null>(null)
 
 const artifactKey = computed(() => (route.meta.artifactKey as string) ?? '')
 const reqRef = computed(() => (route.meta.reqRef as string) ?? '')
@@ -192,6 +232,23 @@ const aiMemoryKey = computed(() => {
   if (!pid || !vid) return ''
   return `${pid}:${vid}:requirement_doc_assist`
 })
+
+const aiAnchorStorageKey = computed(() => (aiMemoryKey.value ? `pmp_ai_assist_history:${aiMemoryKey.value}:anchor` : ''))
+
+watch(
+  aiAnchorStorageKey,
+  (k) => {
+    if (!k) return
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem(k)
+      if (raw) lastAppliedAssistantId.value = raw
+    } catch {
+      // ignore
+    }
+  },
+  { immediate: true },
+)
 
 function goList() {
   const id = route.params.projectId
@@ -311,10 +368,19 @@ function onExportCommand(command: string) {
   if (command === 'md' || command === 'html' || command === 'pdf') exportCurrent(command)
 }
 
-function handleAiApply(text: string) {
+function applyMarkdownWithTyping(text: string, assistantId: string) {
   if (!detail.value?.is_latest) {
     ElMessage.warning('历史版本不允许写入，请打开最新版本')
     return
+  }
+
+  lastAppliedAssistantId.value = assistantId
+  if (aiAnchorStorageKey.value) {
+    try {
+      window.localStorage.setItem(aiAnchorStorageKey.value, assistantId)
+    } catch {
+      // ignore
+    }
   }
 
   const full = text ?? ''
@@ -343,6 +409,108 @@ function handleAiApply(text: string) {
       markdown.value = full
     }
   }, 16)
+}
+
+function handleAiApplyWithMeta(payload: { assistantId: string; text: string }) {
+  applyMarkdownWithTyping(payload.text, payload.assistantId)
+}
+
+function openDiffDialog(oldText: string, newText: string, assistantId: string) {
+  diffOldMd.value = oldText ?? ''
+  diffNewMd.value = newText ?? ''
+  proposedAssistantId.value = assistantId
+  diffLinesRender.value = buildLineDiff(diffOldMd.value, diffNewMd.value)
+  diffAction.value = null
+  diffDialogVisible.value = true
+}
+
+function closeDiffDialog() {
+  diffDialogVisible.value = false
+  proposedAssistantId.value = null
+  diffLinesRender.value = []
+}
+
+function onAcceptDiff() {
+  if (!proposedAssistantId.value) return
+  if (!detail.value?.is_latest) {
+    ElMessage.warning('历史版本不允许写入，请打开最新版本')
+    return
+  }
+
+  diffAction.value = 'accept'
+  aiDrawerRef.value?.truncateHistoryToAssistantId(proposedAssistantId.value)
+  applyMarkdownWithTyping(diffNewMd.value, proposedAssistantId.value)
+  closeDiffDialog()
+}
+
+function onRollbackDiff() {
+  diffAction.value = 'rollback'
+  aiDrawerRef.value?.truncateHistoryToAssistantId(lastAppliedAssistantId.value)
+  closeDiffDialog()
+}
+
+function onDiffDialogClosed() {
+  // 用户点右上角 X 关闭时视为回退：不应用 AI 修改，并回到上次编辑成功后的上下文。
+  if (diffAction.value === null) onRollbackDiff()
+}
+
+function handleAiPropose(payload: { assistantId: string; markdown: string }) {
+  if (!detail.value?.is_latest) {
+    ElMessage.warning('当前为历史版本，仅允许查看与导出')
+    return
+  }
+  openDiffDialog(markdown.value, payload.markdown, payload.assistantId)
+}
+
+function buildLineDiff(oldText: string, newText: string): Array<{ kind: 'equal' | 'add' | 'del'; line: string }> {
+  const oldLines = (oldText ?? '').split('\n')
+  const newLines = (newText ?? '').split('\n')
+
+  const m = oldLines.length
+  const n = newLines.length
+  const maxCells = 600 * 600
+  if (m * n > maxCells) {
+    const out: Array<{ kind: 'equal' | 'add' | 'del'; line: string }> = []
+    for (const line of oldLines) out.push({ kind: 'del', line })
+    for (const line of newLines) out.push({ kind: 'add', line })
+    return out
+  }
+
+  // LCS DP：行级 diff 的最小实现（用于 MVP 展示差别）
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i -= 1) {
+    for (let j = n - 1; j >= 0; j -= 1) {
+      dp[i][j] = oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+
+  const out: Array<{ kind: 'equal' | 'add' | 'del'; line: string }> = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (oldLines[i] === newLines[j]) {
+      out.push({ kind: 'equal', line: oldLines[i] })
+      i += 1
+      j += 1
+      continue
+    }
+    if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push({ kind: 'del', line: oldLines[i] })
+      i += 1
+    } else {
+      out.push({ kind: 'add', line: newLines[j] })
+      j += 1
+    }
+  }
+  while (i < m) {
+    out.push({ kind: 'del', line: oldLines[i] })
+    i += 1
+  }
+  while (j < n) {
+    out.push({ kind: 'add', line: newLines[j] })
+    j += 1
+  }
+  return out
 }
 
 watch(
@@ -488,5 +656,49 @@ onUnmounted(() => {
   padding-left: 1.2rem;
   color: var(--el-text-color-regular);
   line-height: 1.6;
+}
+
+.diff-scroll {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  padding: 8px 10px;
+}
+
+.diff-lines {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.diff-line {
+  display: flex;
+  gap: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 2px 0;
+}
+
+.diff-prefix {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--el-text-color-secondary);
+}
+
+.diff-text {
+  flex: 1;
+}
+
+.diff-line.is-add {
+  color: var(--el-color-success);
+}
+
+.diff-line.is-del {
+  color: var(--el-color-danger);
+}
+
+.diff-line.is-equal {
+  color: var(--el-text-color-regular);
 }
 </style>

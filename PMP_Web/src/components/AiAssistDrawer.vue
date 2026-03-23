@@ -117,7 +117,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
-  (e: 'apply', text: string): void
+  (e: 'apply', payload: { assistantId: string; text: string }): void
+  (e: 'propose', payload: { assistantId: string; markdown: string }): void
   (e: 'generated', text: string): void
 }>()
 
@@ -343,6 +344,9 @@ async function generateDoc() {
 
   if (messages.value.some((m) => m.role === 'assistant' && m.streaming)) return
 
+  const maybeMd = props.payloadBase?.markdown
+  const hasExistingDoc = typeof maybeMd === 'string' && maybeMd.trim().length > 0
+
   generatingDoc.value = true
   try {
     const assistantId = nextId('a')
@@ -359,16 +363,48 @@ async function generateDoc() {
       row.content = md
     }
 
-    // md 一次性回填给编辑器；编辑器侧做打字动画（避免 drawer 关闭时打断动画）
-    emit('apply', md)
-    ElMessage.success('已生成并应用到正文')
-    emit('update:modelValue', false)
+    if (hasExistingDoc) {
+      // 已有正文：先把修改建议返回给父组件做 diff，再由父组件决定接受/回退
+      emit('propose', { assistantId, markdown: md })
+    } else {
+      // 无正文：沿用现有交互，直接应用到编辑框（并关闭抽屉）
+      emit('apply', { assistantId, text: md })
+      ElMessage.success('已生成并应用到正文')
+      emit('update:modelValue', false)
+    }
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : 'AI 生成失败')
   } finally {
     generatingDoc.value = false
   }
 }
+
+function truncateHistoryToAssistantId(assistantId: string | null) {
+  if (assistantStreamTimer.value) {
+    window.clearInterval(assistantStreamTimer.value)
+    assistantStreamTimer.value = null
+  }
+
+  if (!assistantId) {
+    messages.value = []
+    persistHistoryToMemory()
+    return
+  }
+
+  const idx = messages.value.findIndex((m) => m.id === assistantId)
+  if (idx < 0) {
+    messages.value = []
+    persistHistoryToMemory()
+    return
+  }
+
+  messages.value = messages.value.slice(0, idx + 1)
+  persistHistoryToMemory()
+}
+
+defineExpose({
+  truncateHistoryToAssistantId,
+})
 
 function onEnterToSend(e: KeyboardEvent) {
   // Enter 发送；Shift+Enter 换行
