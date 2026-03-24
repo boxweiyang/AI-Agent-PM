@@ -91,7 +91,7 @@
 
 | 项 | 说明 |
 |----|------|
-| **M02～M11 真实工作台** | `REQ-M02` 已实现需求文档列表/详情/版本机制与 AI 辅助（含 diff MVP + 对话长期记忆/上下文截断）；**M03～M11 仍为占位**（无真实看板/文档业务） |
+| **M02～M11 真实工作台** | `REQ-M02`、`REQ-M02B`、`REQ-M02C` 已落地前端工作台（M02C 为 Mock 驱动）；**M03～M11 其余仍为占位**（无真实看板/文档业务） |
 | **REQ-M08 项目内 Dashboard** | **Mock 页已落地**（卡片/风险/筛选/下钻）；与 M03～M07 **真实同源数据**仍待后端；AI 摘要为 invoke Mock |
 | **设置页** | 个人/系统/AI 配置 **尚无真库持久化**；Mock 阶段可用 **MSW + 内存/或 localStorage** 模拟保存 |
 | **PMP_Service 项目 API** | **本阶段不阻塞前端**；真后端对齐契约为 Mock 闭环之后的工作 |
@@ -108,6 +108,8 @@
 
 1. **TECH-001～005：开始完成技术设计页面**：把 `PMP_Req_V2/00-技术规划` 里各 TECH 文档的结构/目录做成页面（先实现导航、展示与导出壳，再补交互）。  
 2. **按 REQ 铺开 M03～M11**：对照 **`PMP_Req_V2`** 各分册，将侧栏各入口从占位升级为 **有结构的页面**（可先简后繁）；每模块需要的数据在 **handlers** 里用内存 store 或 **fixture** 模拟。  
+   - 优先接 **M04 Task 页面**：消费 `api_endpoint_id` 查询参数（来自 M02C），并完成“任务关联接口”的高亮/筛选；复用 Mock 接口 `GET /api/v1/projects/{projectId}/api-catalog/tasks/{taskId}/endpoints`。  
+   - 完成 **Task ↔ 接口状态回写**：把 Task 完成态映射回 M02C 三条并行状态（前端/后端/测试）。  
 3. ~~**`ProjectDashboard`（M08）**~~：**已完成（Mock）** — `GET …/dashboard` + 页面；后续与真服务对齐即可。  
 4. **设置三页**：AI / 个人 / 系统在 Mock 下 **可保存、可刷新仍生效**（推荐 **localStorage** 或 MSW **sessionStorage 式**内存，与后续真 API 字段对齐时再切换数据源）。  
 5. **契约同步**：每增加 Mock 行为，更新 **`openapi.yaml`**（含 request/response schema），避免与真后端对接时再大改。  
@@ -150,6 +152,7 @@
 | 2026-03-22 | **REQ-M08 Dashboard**：OpenAPI + MSW + `ProjectDashboard.vue`；§4.4/§5/§6 同步。 |
 | 2026-03-22 | **顶栏**：`AppHeaderBar` 面包屑全路径 + 返回箭头；`headerBreadcrumbs.ts`；§4.2 更新。 |
 | 2026-03-22 | **REQ-M02**：需求文档 AI 辅助 diff MVP + 对话长期记忆（project+version）与接受/回退后上下文截断。 |
+| 2026-03-24 | **REQ-M02C**：接口管理页（Mock）上线；已预留与 M04 的 `api_endpoint_id` 跨模块联动与 Task-接口反查接口，后续开发 M04 时务必先接入。 |
 
 ---
 

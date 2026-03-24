@@ -57,6 +57,7 @@ import {
   patchApiCatalogEndpoint,
   listApiCatalogTasks,
   bindApiCatalogEndpointTasks,
+  listApiCatalogEndpointsByTask,
 } from '@/mocks/apiCatalogStore'
 import type {
   ApiCatalogAiGenerateMode,
@@ -1548,5 +1549,13 @@ ${message || '（无）'}
     const r = bindApiCatalogEndpointTasks(projectId, endpointId, Array.isArray(body.task_ids) ? body.task_ids : [])
     if (!r.ok) return HttpResponse.json({ code: 40421, message: r.message, data: null })
     return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.get('/api/v1/projects/:projectId/api-catalog/tasks/:taskId/endpoints', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listApiCatalogEndpointsByTask(projectId, taskId) })
   }),
 ]

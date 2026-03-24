@@ -66,6 +66,13 @@
                     <el-table-column prop="type" label="类型" width="100" />
                     <el-table-column prop="description" label="说明" min-width="180" />
                   </el-table>
+                  <p class="api-expand-title">已绑定 Task</p>
+                  <el-space wrap>
+                    <el-tag v-for="tid in row.bound_task_ids || []" :key="tid" size="small">
+                      {{ taskTitleMap[tid] || tid }}
+                    </el-tag>
+                    <span v-if="!(row.bound_task_ids || []).length" class="constraint-preview">暂无绑定</span>
+                  </el-space>
                 </div>
               </template>
             </el-table-column>
@@ -82,6 +89,11 @@
                   <el-tag v-if="row.qa_status === 'done'" type="success" size="small">测试已完成</el-tag>
                   <el-tag v-if="row.fe_status !== 'done' && row.be_status !== 'done' && row.qa_status !== 'done'" size="small">待推进</el-tag>
                 </el-space>
+              </template>
+            </el-table-column>
+            <el-table-column label="绑定Task" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" type="info">{{ (row.bound_task_ids || []).length }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="160" fixed="right">
@@ -203,6 +215,7 @@
         <el-option v-for="t in taskOptions" :key="t.id" :label="t.title" :value="t.id" />
       </el-select>
       <template #footer>
+        <el-button @click="goTaskPage">去 Task 页面</el-button>
         <el-button @click="taskBindDialog = false">取消</el-button>
         <el-button type="primary" @click="saveTaskBinding">保存绑定</el-button>
       </template>
@@ -213,11 +226,12 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { apiClient } from '@/api/client'
 import type { ApiCatalogAiGenerateMode, ApiCatalogConstraint, ApiCatalogEndpoint, ApiCatalogTaskSummary, ApiEnvelope, ApiHttpMethod } from '@/types/api-contract'
 
 const route = useRoute()
+const router = useRouter()
 const projectId = computed(() => (typeof route.params.projectId === 'string' ? route.params.projectId : ''))
 const reqRef = computed(() => (route.meta.reqRef as string) ?? '')
 const loading = ref(false)
@@ -239,6 +253,13 @@ const taskOptions = ref<ApiCatalogTaskSummary[]>([])
 const bindingEndpointId = ref('')
 const bindingEndpointTitle = ref('')
 const selectedTaskIds = ref<string[]>([])
+const taskTitleMap = computed<Record<string, string>>(() => {
+  const m: Record<string, string> = {}
+  taskOptions.value.forEach((t) => {
+    m[t.id] = t.title
+  })
+  return m
+})
 
 const grouped = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -263,12 +284,14 @@ async function fetchAll() {
   if (!projectId.value) return
   loading.value = true
   try {
-    const [c, e] = await Promise.all([
+    const [c, e, t] = await Promise.all([
       apiClient.get<ApiEnvelope<ApiCatalogConstraint>>(`/api/v1/projects/${projectId.value}/api-catalog/constraints`),
       apiClient.get<ApiEnvelope<{ items: ApiCatalogEndpoint[] }>>(`/api/v1/projects/${projectId.value}/api-catalog/endpoints`),
+      apiClient.get<ApiEnvelope<{ items: ApiCatalogTaskSummary[] }>>(`/api/v1/projects/${projectId.value}/api-catalog/tasks`),
     ])
     constraint.value = c.data.data
     endpoints.value = e.data.data?.items ?? []
+    taskOptions.value = t.data.data?.items ?? []
   } finally { loading.value = false }
 }
 watch(
@@ -302,6 +325,14 @@ async function saveTaskBinding() {
   await apiClient.put(`/api/v1/projects/${projectId.value}/api-catalog/endpoints/${bindingEndpointId.value}/task-bindings`, { task_ids: selectedTaskIds.value })
   taskBindDialog.value = false
   await fetchAll()
+}
+function goTaskPage() {
+  if (!projectId.value) return
+  void router.push({
+    name: 'project-m04-tasks',
+    params: { projectId: projectId.value },
+    query: { api_endpoint_id: bindingEndpointId.value || '' },
+  })
 }
 </script>
 

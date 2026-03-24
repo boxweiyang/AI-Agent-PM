@@ -19,7 +19,16 @@
       <template v-else-if="ready">
         <el-result icon="success" title="该模块资产已就绪（演示）" :sub-title="subTitleReady">
           <template #extra>
+            <el-alert
+              v-if="taskApiEndpointIdHint"
+              type="info"
+              show-icon
+              :closable="false"
+              class="task-link-hint"
+              :title="`来自接口管理的联动占位：api_endpoint_id=${taskApiEndpointIdHint}`"
+            />
             <el-button type="primary" @click="goDetail">返回项目详情</el-button>
+            <el-button v-if="taskApiEndpointIdHint" @click="goApiCatalog">回到接口管理</el-button>
           </template>
         </el-result>
       </template>
@@ -66,10 +75,20 @@ const subTitleReady = computed(
 const subTitlePending = computed(
   () => `按 ${reqRef.value} 落地后，可在此编辑文档与协作数据。演示环境可先「生成」解锁入口。`,
 )
+const taskApiEndpointIdHint = computed(() => {
+  if (route.name !== 'project-m04-tasks') return ''
+  const raw = route.query.api_endpoint_id
+  return typeof raw === 'string' ? raw : ''
+})
 
 function goDetail() {
   const id = route.params.projectId
   if (typeof id === 'string') void router.push({ name: 'project-detail', params: { projectId: id } })
+}
+
+function goApiCatalog() {
+  const id = route.params.projectId
+  if (typeof id === 'string') void router.push({ name: 'project-m02c-apis', params: { projectId: id } })
 }
 
 async function fetchProject() {
@@ -139,5 +158,9 @@ onMounted(() => {
 
 .mod-card {
   border-radius: 10px;
+}
+
+.task-link-hint {
+  margin-bottom: 12px;
 }
 </style>

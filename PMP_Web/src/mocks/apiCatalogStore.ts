@@ -103,7 +103,6 @@ export function patchApiCatalogConstraint(projectId: string, patch: Partial<ApiC
     ...patch,
     id: s.constraint.id,
     updated_at: nowIso(),
-    bound_task_ids: body.bound_task_ids || [],
   }
   return s.constraint
 }
@@ -221,6 +220,13 @@ export function aiGenerateApiCatalogEndpoints(projectId: string, mode: ApiCatalo
 
 export function listApiCatalogTasks(projectId: string) {
   return { items: [...state(projectId).tasks] }
+}
+
+export function listApiCatalogEndpointsByTask(projectId: string, taskId: string) {
+  const s = state(projectId)
+  return {
+    items: s.endpoints.filter((e) => (e.bound_task_ids || []).includes(taskId)),
+  }
 }
 
 export function bindApiCatalogEndpointTasks(projectId: string, endpointId: string, taskIds: string[]) {

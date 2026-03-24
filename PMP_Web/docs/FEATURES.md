@@ -55,6 +55,7 @@
 | `/projects/:projectId/m02/requirements/modules/:moduleId/versions/:versionId` | 模块细化文档版本详情 | `ProjectLayout` + `requirements/RequirementModuleDocVersionDetailPage.vue` | 与总文档详情能力对齐；**`capability: requirement_module_doc_assist`**；保存后回列表并带 **`?tab=modules`** |
 | `/projects/:projectId/m02b/design` | 技术设计（工作台） | `ProjectLayout` + `design/TechDesignDocListPage.vue` | REQ-M02B；需求弹窗；**技术选型** + **`tech_selection_assist` AI**；`tech_delivery_parts` **PATCH**（**v0.3.2**）；**技术设计文档** 版本列表 |
 | `/projects/:projectId/m02b/design/versions/:versionId` | 技术设计版本详情 | `ProjectLayout` + `design/TechDesignDocVersionDetailPage.vue` | Markdown 编辑/预览；保存 **新建 / 覆盖**；**`capability: tech_design_doc_assist`** |
+| `/projects/:projectId/m02c/apis` | 接口管理 | `ProjectLayout` + `apis/ApiCatalogPage.vue` | REQ-M02C；通用约束管理（含 AI 辅助）；接口清单 AI 生成（全量/增量）；多维分组、筛选搜索、Swagger 风格展开；接口 CRUD；Task 绑定（Mock） |
 | `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02C～M11（除已落地路径）；`artifacts` 驱动已生成/去生成 |
 
 ---
@@ -137,6 +138,22 @@
 - **路径**：`/projects/:projectId/<模块路径>`（如 `m02c/apis`）；**`m02/requirements` 与 `m02b/design` 已接真实页，不在此列**。
 - **已生成**（`artifacts[键]===true`）：成功态说明，后续可替换为真实工作台。
 - **未生成**：**一键生成（演示）** 调用 **PATCH** 合并 `artifacts`，再可进入已生成态；**返回项目详情** 回到概览。
+- **Task 占位联动**：当访问 `project-m04-tasks` 且携带查询参数 **`api_endpoint_id`**（来自接口管理「去 Task 页面」），占位页会展示联动提示，并提供 **「回到接口管理」** 按钮，避免跨模块联动信息丢失。
+
+## 6.1.5 `/projects/:projectId/m02c/apis` 接口管理（REQ-M02C，V1）
+
+- **顶部约束卡片**：读取/编辑通用接口约束（版本、标题、Markdown、统一响应 JSON、错误码字典）；支持 **AI 辅助生成/优化**。
+- **接口清单生成**：按钮 **AI 生成接口清单**，支持 **`full_replace` / `incremental`** 两种模式。
+- **多维分组与筛选**：分组支持 **需求模块 / 交付部分 / 公共功能**；支持状态筛选与关键字搜索。
+- **Swagger 风格展示**：列表支持展开查看 **请求参数（path/query/header/body）**、**成功返回参数**、**错误返回参数**。
+- **接口 CRUD**：可新增/编辑/删除接口；编辑器以参数表格化维护，不依赖手写 JSON。
+- **Task 绑定（Mock）**：每条接口可多选绑定 Task，列表显示绑定数量，展开区显示已绑定 Task 标题；支持跳转到 Task 模块并携带 `api_endpoint_id` 占位参数。
+
+## 6.2 跨模块联动待开发标注（避免遗漏）
+
+- **M02C → M04 已预留**：接口管理已把 `api_endpoint_id` 传给 Task 页面；当前 Task 页面仍为占位，后续接入真实 M04 时需先消费该参数并高亮对应接口/任务关系。
+- **Task 状态回写接口状态**：当前 M02C 仅展示三条并行状态标签（前端/后端/测试）；后续 M04 实现后需把任务完成态映射回接口状态字段。
+- **反向查询接口已预留（Mock）**：`GET /api/v1/projects/{projectId}/api-catalog/tasks/{taskId}/endpoints`；后续 M04 页面可直接用此接口渲染“任务关联接口”。
 
 ## 6.3 `/enter-last-project` 进入最近项目
 
@@ -181,6 +198,7 @@
 | 2026-03-24 | **REQ-M02B 技术设计**：契约 **v0.3.1** `tech-design-doc`；**`TechDesignDocListPage` / `TechDesignDocVersionDetailPage`**（列表+详情，对齐需求文档）；MSW **`techDesignDocStore`**；**`tech_design_doc_assist`**。 |
 | 2026-03-24 | **技术设计工作台**：需求**最新版弹窗**+下载；**`tech_delivery_parts` 技术选型**（**v0.3.2** `TechDeliveryPart`，PATCH 整表替换）；列表页三段布局；**`techDeliveryPartKinds.ts`**。 |
 | 2026-03-24 | **技术选型 AI**：**`tech_selection_assist`** + **`AiAssistDrawer`** `assistKind=tech_selection`；**`techDeliveryPartsNormalize.ts`**（规范化与 diff 文本）；MSW **`generate_tech_selection`**。 |
+| 2026-03-24 | **REQ-M02C 接口管理（V1）**：`ApiCatalogPage` 上线；通用约束+AI、接口清单 AI（全量/增量）、多维分组与筛选、Swagger 风格展开、接口 CRUD、Task 绑定（Mock）与跨模块占位联动标注。 |
 
 ---
 
