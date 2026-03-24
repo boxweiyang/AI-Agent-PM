@@ -46,7 +46,22 @@ import {
   patchRequirementDocModuleVersion,
   reorderRequirementDocModules,
 } from '@/mocks/requirementModuleDocStore'
+import {
+  aiGenerateApiCatalogConstraint,
+  aiGenerateApiCatalogEndpoints,
+  createApiCatalogEndpoint,
+  deleteApiCatalogEndpoint,
+  getApiCatalogConstraint,
+  listApiCatalogEndpoints,
+  patchApiCatalogConstraint,
+  patchApiCatalogEndpoint,
+  listApiCatalogTasks,
+  bindApiCatalogEndpointTasks,
+} from '@/mocks/apiCatalogStore'
 import type {
+  ApiCatalogAiGenerateMode,
+  ApiCatalogConstraint,
+  ApiCatalogEndpoint,
   RequirementDocModuleAiSplitRequest,
   RequirementDocModuleCreateBody,
   RequirementDocModulePatchBody,
@@ -1443,5 +1458,95 @@ ${message || '（无）'}
       message: 'ok',
       data: { echo: message, capability },
     })
+  }),
+
+  http.get('/api/v1/projects/:projectId/api-catalog/constraints', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: getApiCatalogConstraint(projectId) })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/api-catalog/constraints', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let body: Partial<ApiCatalogConstraint> = {}
+    try { body = (await request.json()) as Partial<ApiCatalogConstraint> } catch { /* ignore */ }
+    return HttpResponse.json({ code: 0, message: 'ok', data: patchApiCatalogConstraint(projectId, body) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/api-catalog/constraints/ai-generate', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: aiGenerateApiCatalogConstraint(projectId) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/api-catalog/endpoints', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listApiCatalogEndpoints(projectId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/api-catalog/endpoints', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let body: Partial<ApiCatalogEndpoint> = {}
+    try { body = (await request.json()) as Partial<ApiCatalogEndpoint> } catch { /* ignore */ }
+    return HttpResponse.json({ code: 0, message: 'ok', data: createApiCatalogEndpoint(projectId, body) })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/api-catalog/endpoints/:endpointId', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const endpointId = typeof params.endpointId === 'string' ? params.endpointId : params.endpointId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let body: Partial<ApiCatalogEndpoint> = {}
+    try { body = (await request.json()) as Partial<ApiCatalogEndpoint> } catch { /* ignore */ }
+    const r = patchApiCatalogEndpoint(projectId, endpointId, body)
+    if (!r.ok) return HttpResponse.json({ code: 40421, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/api-catalog/endpoints/:endpointId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const endpointId = typeof params.endpointId === 'string' ? params.endpointId : params.endpointId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const r = deleteApiCatalogEndpoint(projectId, endpointId)
+    if (!r.ok) return HttpResponse.json({ code: 40421, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.post('/api/v1/projects/:projectId/api-catalog/endpoints/ai-generate', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let body: { mode?: ApiCatalogAiGenerateMode } = {}
+    try { body = (await request.json()) as { mode?: ApiCatalogAiGenerateMode } } catch { /* ignore */ }
+    const mode = body.mode === 'full_replace' ? 'full_replace' : 'incremental'
+    return HttpResponse.json({ code: 0, message: 'ok', data: aiGenerateApiCatalogEndpoints(projectId, mode) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/api-catalog/tasks', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listApiCatalogTasks(projectId) })
+  }),
+
+  http.put('/api/v1/projects/:projectId/api-catalog/endpoints/:endpointId/task-bindings', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const endpointId = typeof params.endpointId === 'string' ? params.endpointId : params.endpointId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let body: { task_ids?: string[] } = {}
+    try { body = (await request.json()) as { task_ids?: string[] } } catch { /* ignore */ }
+    const r = bindApiCatalogEndpointTasks(projectId, endpointId, Array.isArray(body.task_ids) ? body.task_ids : [])
+    if (!r.ok) return HttpResponse.json({ code: 40421, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
   }),
 ]

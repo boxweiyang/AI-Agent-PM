@@ -1364,6 +1364,179 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeError"
+  /api/v1/projects/{projectId}/api-catalog/constraints:
+    get:
+      tags: [project]
+      summary: 获取接口管理通用约束
+      operationId: getApiCatalogConstraints
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeApiCatalogConstraint"
+    patch:
+      tags: [project]
+      summary: 更新接口管理通用约束
+      operationId: patchApiCatalogConstraints
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiCatalogConstraintPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeApiCatalogConstraint"
+  /api/v1/projects/{projectId}/api-catalog/constraints/ai-generate:
+    post:
+      tags: [ai]
+      summary: AI 生成/优化通用接口约束
+      operationId: postApiCatalogConstraintAiGenerate
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeApiCatalogConstraint"
+  /api/v1/projects/{projectId}/api-catalog/endpoints:
+    get:
+      tags: [project]
+      summary: 获取接口清单
+      operationId: listApiCatalogEndpoints
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeApiCatalogEndpointList"
+    post:
+      tags: [project]
+      summary: 新增接口定义
+      operationId: createApiCatalogEndpoint
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiCatalogEndpointCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeApiCatalogEndpoint"
+  /api/v1/projects/{projectId}/api-catalog/endpoints/ai-generate:
+    post:
+      tags: [ai]
+      summary: AI 生成接口清单（全量或增量）
+      operationId: postApiCatalogEndpointsAiGenerate
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiCatalogAiGenerateRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeApiCatalogAiGenerateResult"
+  /api/v1/projects/{projectId}/api-catalog/endpoints/{endpointId}:
+    patch:
+      tags: [project]
+      summary: 更新接口定义
+      operationId: patchApiCatalogEndpoint
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: endpointId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiCatalogEndpointPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeApiCatalogEndpoint"
+    delete:
+      tags: [project]
+      summary: 删除接口定义
+      operationId: deleteApiCatalogEndpoint
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: endpointId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
 
 components:
   securitySchemes:
@@ -2292,3 +2465,150 @@ components:
           oneOf:
             - type: string
             - type: object
+    ApiCatalogConstraintErrorCode:
+      type: object
+      required: [code, meaning]
+      properties:
+        code: { type: string }
+        meaning: { type: string }
+    ApiCatalogConstraint:
+      type: object
+      required: [id, version, title, content_markdown, response_schema_json, error_codes, updated_at]
+      properties:
+        id: { type: string }
+        version: { type: string }
+        title: { type: string }
+        content_markdown: { type: string }
+        response_schema_json: { type: string }
+        error_codes:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogConstraintErrorCode" }
+        updated_at: { type: string, format: date-time }
+    ApiCatalogConstraintPatchBody:
+      type: object
+      properties:
+        version: { type: string }
+        title: { type: string }
+        content_markdown: { type: string }
+        response_schema_json: { type: string }
+        error_codes:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogConstraintErrorCode" }
+    ApiCatalogParam:
+      type: object
+      required: [name, in, type, required, description]
+      properties:
+        name: { type: string }
+        in: { type: string, enum: [path, query, header, body] }
+        type: { type: string }
+        required: { type: boolean }
+        description: { type: string }
+    ApiCatalogResponseField:
+      type: object
+      required: [name, type, description]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        description: { type: string }
+    ApiCatalogGroupRefs:
+      type: object
+      properties:
+        requirement_module: { type: string }
+        delivery_part: { type: string }
+        common_group: { type: string }
+    ApiCatalogEndpoint:
+      type: object
+      required: [id, name, method, path, summary, status, group_refs, request_params, response_success_params, response_error_params, fe_status, be_status, qa_status, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        method: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
+        path: { type: string }
+        summary: { type: string }
+        status: { type: string, enum: [draft, reviewed, frozen, deprecated] }
+        group_refs: { $ref: "#/components/schemas/ApiCatalogGroupRefs" }
+        request_params:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogParam" }
+        response_success_params:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogResponseField" }
+        response_error_params:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogResponseField" }
+        fe_status: { type: string, enum: [todo, done] }
+        be_status: { type: string, enum: [todo, done] }
+        qa_status: { type: string, enum: [todo, done] }
+        updated_at: { type: string, format: date-time }
+    ApiCatalogEndpointCreateBody:
+      allOf:
+        - $ref: "#/components/schemas/ApiCatalogEndpoint"
+    ApiCatalogEndpointPatchBody:
+      type: object
+      properties:
+        name: { type: string }
+        method: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
+        path: { type: string }
+        summary: { type: string }
+        status: { type: string, enum: [draft, reviewed, frozen, deprecated] }
+        group_refs: { $ref: "#/components/schemas/ApiCatalogGroupRefs" }
+        request_params:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogParam" }
+        response_success_params:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogResponseField" }
+        response_error_params:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogResponseField" }
+        fe_status: { type: string, enum: [todo, done] }
+        be_status: { type: string, enum: [todo, done] }
+        qa_status: { type: string, enum: [todo, done] }
+    ApiCatalogEndpointListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogEndpoint" }
+    ApiCatalogAiGenerateRequest:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [full_replace, incremental]
+    ApiCatalogAiGenerateResultData:
+      type: object
+      required: [items, mode, added, skipped]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ApiCatalogEndpoint" }
+        mode: { type: string, enum: [full_replace, incremental] }
+        added: { type: integer }
+        skipped: { type: integer }
+    EnvelopeApiCatalogConstraint:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ApiCatalogConstraint" }
+    EnvelopeApiCatalogEndpoint:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ApiCatalogEndpoint" }
+    EnvelopeApiCatalogEndpointList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ApiCatalogEndpointListData" }
+    EnvelopeApiCatalogAiGenerateResult:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/ApiCatalogAiGenerateResultData" }

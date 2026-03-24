@@ -3,7 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { PROJECT_RELATED_MODULES } from '@/config/projectRelatedModules'
 
 /** 已接真实页面的模块路由名（其余走占位页） */
-const IMPLEMENTED_PROJECT_MODULE_NAMES = new Set(['project-m02-requirements', 'project-m02b-design'])
+const IMPLEMENTED_PROJECT_MODULE_NAMES = new Set(['project-m02-requirements', 'project-m02b-design', 'project-m02c-apis'])
 
 const PLACEHOLDER_MODULES = PROJECT_RELATED_MODULES.filter((m) => !IMPLEMENTED_PROJECT_MODULE_NAMES.has(m.name))
 
@@ -67,6 +67,12 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     name: 'project-m02b-design',
     component: () => import('./pages/design/TechDesignDocListPage.vue'),
     meta: { title: '技术设计', artifactKey: 'tech_design', reqRef: 'REQ-M02B' },
+  },
+  {
+    path: 'm02c/apis',
+    name: 'project-m02c-apis',
+    component: () => import('./pages/apis/ApiCatalogPage.vue'),
+    meta: { title: '接口管理', artifactKey: 'api_catalog', reqRef: 'REQ-M02C' },
   },
   ...projectModuleChildren,
 ]

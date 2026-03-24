@@ -270,6 +270,75 @@ export type TechDesignDocModuleAutoCreateResultData = {
   created_count: number
 }
 
+export type ApiHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+export type ApiParamIn = 'path' | 'query' | 'header' | 'body'
+export type ApiProgressStatus = 'todo' | 'done'
+export type ApiEndpointStatus = 'draft' | 'reviewed' | 'frozen' | 'deprecated'
+
+export type ApiCatalogConstraintErrorCode = {
+  code: string
+  meaning: string
+}
+
+export type ApiCatalogConstraint = {
+  id: string
+  version: string
+  title: string
+  content_markdown: string
+  response_schema_json: string
+  error_codes: ApiCatalogConstraintErrorCode[]
+  updated_at: string
+}
+
+export type ApiCatalogParam = {
+  name: string
+  in: ApiParamIn
+  type: string
+  required: boolean
+  description: string
+}
+
+export type ApiCatalogResponseField = {
+  name: string
+  type: string
+  description: string
+}
+
+export type ApiCatalogGroupRefs = {
+  requirement_module?: string
+  delivery_part?: string
+  common_group?: string
+}
+
+export type ApiCatalogEndpoint = {
+  id: string
+  name: string
+  method: ApiHttpMethod
+  path: string
+  summary: string
+  status: ApiEndpointStatus
+  group_refs: ApiCatalogGroupRefs
+  request_params: ApiCatalogParam[]
+  response_success_params: ApiCatalogResponseField[]
+  response_error_params: ApiCatalogResponseField[]
+  fe_status: ApiProgressStatus
+  be_status: ApiProgressStatus
+  qa_status: ApiProgressStatus
+  bound_task_ids?: string[]
+  updated_at: string
+}
+
+export type ApiCatalogEndpointListData = {
+  items: ApiCatalogEndpoint[]
+}
+
+export type ApiCatalogAiGenerateMode = 'full_replace' | 'incremental'
+
+export type ApiCatalogTaskSummary = {
+  id: string
+  title: string
+}
+
 /** GET …/requirement-doc/modules */
 export type RequirementDocModuleSummary = {
   id: string
