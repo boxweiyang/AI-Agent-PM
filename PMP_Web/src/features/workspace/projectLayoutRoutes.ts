@@ -69,6 +69,12 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     meta: { title: '技术设计', artifactKey: 'tech_design', reqRef: 'REQ-M02B' },
   },
   {
+    path: 'm02c/apis/constraints/versions/:versionId',
+    name: 'project-m02c-apis-constraint-version',
+    component: () => import('./pages/apis/ApiConstraintVersionDetailPage.vue'),
+    meta: { title: '通用接口约束', artifactKey: 'api_catalog', reqRef: 'REQ-M02C' },
+  },
+  {
     path: 'm02c/apis',
     name: 'project-m02c-apis',
     component: () => import('./pages/apis/ApiCatalogPage.vue'),

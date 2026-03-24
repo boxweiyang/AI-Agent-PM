@@ -290,6 +290,24 @@ export type ApiCatalogConstraint = {
   updated_at: string
 }
 
+export type ApiCatalogConstraintVersionListItem = {
+  id: string
+  version_no: number
+  created_at: string
+  preview: string
+}
+
+export type ApiCatalogConstraintVersionListData = {
+  items: ApiCatalogConstraintVersionListItem[]
+  latest_version_id: string | null
+}
+
+export type ApiCatalogConstraintVersionDetail = ApiCatalogConstraint & {
+  version_no: number
+  created_at: string
+  is_latest: boolean
+}
+
 export type ApiCatalogParam = {
   name: string
   in: ApiParamIn
@@ -316,6 +334,7 @@ export type ApiCatalogEndpoint = {
   method: ApiHttpMethod
   path: string
   summary: string
+  detail_description?: string
   status: ApiEndpointStatus
   group_refs: ApiCatalogGroupRefs
   request_params: ApiCatalogParam[]

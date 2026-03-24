@@ -49,15 +49,21 @@ import {
 import {
   aiGenerateApiCatalogConstraint,
   aiGenerateApiCatalogEndpoints,
+  appendApiCatalogConstraintVersion,
   createApiCatalogEndpoint,
+  createApiCatalogConstraintVersion,
   deleteApiCatalogEndpoint,
+  deleteApiCatalogConstraintVersion,
   getApiCatalogConstraint,
+  getApiCatalogConstraintVersion,
+  listApiCatalogConstraintVersions,
   listApiCatalogEndpoints,
   patchApiCatalogConstraint,
   patchApiCatalogEndpoint,
   listApiCatalogTasks,
   bindApiCatalogEndpointTasks,
   listApiCatalogEndpointsByTask,
+  getApiCatalogLatestGenerateResult,
 } from '@/mocks/apiCatalogStore'
 import type {
   ApiCatalogAiGenerateMode,
@@ -1275,7 +1281,8 @@ export const handlers = [
     if (
       capability === 'requirement_doc_assist' ||
       capability === 'requirement_module_doc_assist' ||
-      capability === 'tech_design_doc_assist'
+      capability === 'tech_design_doc_assist' ||
+      capability === 'api_catalog_constraint_assist'
     ) {
       const payload = body.payload ?? {}
       const action = String(payload?.action ?? 'chat')
@@ -1290,7 +1297,31 @@ export const handlers = [
       if (action === 'generate_doc') {
         const excerpt = message ? message.slice(0, 120) : '（未提供具体诉求）'
         const doc =
-          capability === 'tech_design_doc_assist'
+          capability === 'api_catalog_constraint_assist'
+            ? `# 通用接口约束
+
+## 统一响应包络
+- 所有接口统一返回：\`{ code, message, data }\`
+- 成功：\`code = 0\`
+- 失败：\`code != 0\`，\`message\` 必填
+
+## 字段规范
+- 时间字段统一 ISO8601（UTC）
+- 分页参数统一：\`page\`、\`page_size\`
+- 列表响应建议：\`{ list, total }\`
+
+## 错误码规范
+- 400xx：参数错误
+- 401xx：认证失败
+- 403xx：权限不足
+- 404xx：资源不存在
+- 500xx：服务端异常
+
+## 约束说明
+- 诉求摘要：${excerpt}
+- 待确认项：幂等键、重试策略、链路追踪字段
+`
+            : capability === 'tech_design_doc_assist'
             ? `# 技术设计文档
 
 ## 技术栈与运行环境
@@ -1360,7 +1391,12 @@ export const handlers = [
       }
 
       const suggestLead =
-        capability === 'tech_design_doc_assist'
+        capability === 'api_catalog_constraint_assist'
+          ? `### 下一步我需要你确认/补充的点
+- 响应包络是否固定 \`{ code, message, data }\`？
+- 错误码是否要区分平台码与业务码？
+- 是否需要强制分页/排序/时间格式字段规范？`
+          : capability === 'tech_design_doc_assist'
           ? `### 下一步我需要你确认/补充的点
 - 技术栈是否已冻结？与项目详情中的填写是否一致？
 - 架构上最关键的边界是什么（鉴权、多租户、数据一致性）？
@@ -1465,7 +1501,51 @@ ${message || '（无）'}
     if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
     const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
     if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
-    return HttpResponse.json({ code: 0, message: 'ok', data: getApiCatalogConstraint(projectId) })
+    const row = getApiCatalogConstraint(projectId)
+    if (!row) return HttpResponse.json({ code: 40423, message: '暂无约束版本', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: row })
+  }),
+
+  http.get('/api/v1/projects/:projectId/api-catalog/constraints/versions', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listApiCatalogConstraintVersions(projectId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/api-catalog/constraints/versions', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let body: { mode?: 'empty' | 'from_latest'; markdown?: string; based_on_version_id?: string } = {}
+    try { body = (await request.json()) as { mode?: 'empty' | 'from_latest'; markdown?: string; based_on_version_id?: string } } catch { /* ignore */ }
+    if (typeof body.markdown === 'string' && typeof body.based_on_version_id === 'string') {
+      const r = appendApiCatalogConstraintVersion(projectId, body.markdown, body.based_on_version_id)
+      if (!r.ok) return HttpResponse.json({ code: 40023, message: r.message, data: null })
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    }
+    const mode = body.mode === 'from_latest' ? 'from_latest' : 'empty'
+    return HttpResponse.json({ code: 0, message: 'ok', data: createApiCatalogConstraintVersion(projectId, mode) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/api-catalog/constraints/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const row = getApiCatalogConstraintVersion(projectId, versionId)
+    if (!row) return HttpResponse.json({ code: 40423, message: '约束版本不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: row })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/api-catalog/constraints/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const r = deleteApiCatalogConstraintVersion(projectId, versionId)
+    if (!r.ok) return HttpResponse.json({ code: 40023, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
   }),
 
   http.patch('/api/v1/projects/:projectId/api-catalog/constraints', async ({ request, params }) => {
@@ -1474,7 +1554,9 @@ ${message || '（无）'}
     if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
     let body: Partial<ApiCatalogConstraint> = {}
     try { body = (await request.json()) as Partial<ApiCatalogConstraint> } catch { /* ignore */ }
-    return HttpResponse.json({ code: 0, message: 'ok', data: patchApiCatalogConstraint(projectId, body) })
+    const row = patchApiCatalogConstraint(projectId, body)
+    if (!row) return HttpResponse.json({ code: 40423, message: '暂无约束版本', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: row })
   }),
 
   http.post('/api/v1/projects/:projectId/api-catalog/constraints/ai-generate', ({ request, params }) => {
@@ -1530,6 +1612,15 @@ ${message || '（无）'}
     try { body = (await request.json()) as { mode?: ApiCatalogAiGenerateMode } } catch { /* ignore */ }
     const mode = body.mode === 'full_replace' ? 'full_replace' : 'incremental'
     return HttpResponse.json({ code: 0, message: 'ok', data: aiGenerateApiCatalogEndpoints(projectId, mode) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/api-catalog/endpoints/ai-generate/latest', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const data = getApiCatalogLatestGenerateResult(projectId)
+    if (!data) return HttpResponse.json({ code: 40422, message: '暂无生成记录', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data })
   }),
 
   http.get('/api/v1/projects/:projectId/api-catalog/tasks', ({ request, params }) => {
