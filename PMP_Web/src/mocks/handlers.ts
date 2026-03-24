@@ -15,6 +15,14 @@ import {
   patchRequirementDocVersion,
 } from '@/mocks/requirementDocStore'
 import {
+  appendTechDesignDocVersion,
+  createTechDesignDocVersion,
+  deleteTechDesignDocVersion,
+  getTechDesignDocVersion,
+  listTechDesignDocVersions,
+  patchTechDesignDocVersion,
+} from '@/mocks/techDesignDocStore'
+import {
   aiSplitRequirementDocModules,
   appendRequirementDocModuleVersion,
   createRequirementDocModule,
@@ -34,7 +42,9 @@ import type {
   RequirementDocModulePatchBody,
   RequirementDocModuleReorderBody,
   RequirementDocVersionCreateOrAppendBody,
+  TechDeliveryPart,
 } from '@/types/api-contract'
+import { normalizeTechDeliveryPartsFromUnknown } from '@/utils/techDeliveryPartsNormalize'
 
 type AiInvokeBody = {
   capability?: string
@@ -90,6 +100,7 @@ type MockProjectRow = {
   bug_open_count?: number
   planned_end_at?: string
   artifacts?: Record<string, boolean>
+  tech_delivery_parts?: TechDeliveryPart[]
 }
 
 /**
@@ -115,6 +126,22 @@ const PROJECTS_SEED: MockProjectRow[] = [
     stack_backend: 'Python、FastAPI',
     stack_database: 'PostgreSQL',
     stack_middleware: 'Redis、Kafka',
+    tech_delivery_parts: [
+      {
+        id: 'tdp-seed-a',
+        delivery_kind: 'website',
+        technologies: 'Vue 3、TypeScript、Element Plus',
+        database: '—（浏览器侧）',
+        architecture: 'SPA；经 PMP_Service HTTP API；静态资源走 CDN（示意）',
+      },
+      {
+        id: 'tdp-seed-b',
+        delivery_kind: 'api_service',
+        technologies: 'Python、FastAPI',
+        database: 'PostgreSQL、Redis',
+        architecture: '分层 router → service → ORM；AI 经 ai_gateway import Agent（TECH-001）',
+      },
+    ],
     goals: ['完成核心认证与租户隔离', '提供可观测的审计日志', '支撑灰度发布'],
     scope_in: '账号、角色、权限模型、审计、与现有业务系统的 SSO 对接。',
     scope_out: '不包含财务结算与客服工单系统改造。',
@@ -376,6 +403,9 @@ export const handlers = [
       bug_open_count: 0,
       artifacts: {},
     }
+    if (Array.isArray(raw.tech_delivery_parts)) {
+      item.tech_delivery_parts = normalizeTechDeliveryPartsFromUnknown(raw.tech_delivery_parts)
+    }
     mockProjects = [item, ...mockProjects]
     return HttpResponse.json({
       code: 0,
@@ -559,6 +589,163 @@ export const handlers = [
       code: 0,
       message: 'ok',
       data: listRequirementDocVersions(projectId),
+    })
+  }),
+
+  /** REQ-M02B：技术设计总文档版本列表 */
+  http.get('/api/v1/projects/:projectId/tech-design-doc/versions', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const raw = params.projectId
+    const id = typeof raw === 'string' ? raw : raw?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === id)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: listTechDesignDocVersions(id),
+    })
+  }),
+
+  http.post('/api/v1/projects/:projectId/tech-design-doc/versions', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const raw = params.projectId
+    const projectId = typeof raw === 'string' ? raw : raw?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let body: RequirementDocVersionCreateOrAppendBody = {}
+    try {
+      body = (await request.json()) as RequirementDocVersionCreateOrAppendBody
+    } catch {
+      /* ignore */
+    }
+    if (typeof body.markdown === 'string' && typeof body.based_on_version_id === 'string') {
+      const r = appendTechDesignDocVersion(projectId, body.markdown, body.based_on_version_id)
+      if (!r.ok) {
+        return HttpResponse.json({ code: 40002, message: r.message, data: null })
+      }
+      const row = r.row
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    if (body.mode === 'empty' || body.mode === 'from_latest') {
+      const row = createTechDesignDocVersion(projectId, body.mode)
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    return HttpResponse.json({
+      code: 40001,
+      message: '请求体需包含 mode（empty|from_latest）或 markdown + based_on_version_id',
+      data: null,
+    })
+  }),
+
+  http.get('/api/v1/projects/:projectId/tech-design-doc/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const rawP = params.projectId
+    const projectId = typeof rawP === 'string' ? rawP : rawP?.[0] ?? ''
+    const rawV = params.versionId
+    const versionId = typeof rawV === 'string' ? rawV : rawV?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const row = getTechDesignDocVersion(projectId, versionId)
+    if (!row) {
+      return HttpResponse.json({ code: 40402, message: '版本不存在', data: null })
+    }
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/tech-design-doc/versions/:versionId', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const rawP = params.projectId
+    const projectId = typeof rawP === 'string' ? rawP : rawP?.[0] ?? ''
+    const rawV = params.versionId
+    const versionId = typeof rawV === 'string' ? rawV : rawV?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let markdown = ''
+    try {
+      const b = (await request.json()) as { markdown?: string }
+      markdown = typeof b.markdown === 'string' ? b.markdown : ''
+    } catch {
+      /* ignore */
+    }
+    const r = patchTechDesignDocVersion(projectId, versionId, markdown)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40003, message: r.message, data: null })
+    }
+    const row = r.row
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/tech-design-doc/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const rawP = params.projectId
+    const projectId = typeof rawP === 'string' ? rawP : rawP?.[0] ?? ''
+    const rawV = params.versionId
+    const versionId = typeof rawV === 'string' ? rawV : rawV?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const r = deleteTechDesignDocVersion(projectId, versionId)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40402, message: r.message, data: null })
+    }
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: listTechDesignDocVersions(projectId),
     })
   }),
 
@@ -886,6 +1073,9 @@ export const handlers = [
     if (typeof patch.scope_out === 'string') row.scope_out = patch.scope_out.trim() || undefined
     if (typeof patch.risk_notes === 'string') row.risk_notes = patch.risk_notes.trim() || undefined
     if (typeof patch.manpower_stack_deferred === 'boolean') row.manpower_stack_deferred = patch.manpower_stack_deferred
+    if (Array.isArray(patch.tech_delivery_parts)) {
+      row.tech_delivery_parts = normalizeTechDeliveryPartsFromUnknown(patch.tech_delivery_parts)
+    }
     row.updated_at = new Date().toISOString()
     return HttpResponse.json({
       code: 0,
@@ -914,7 +1104,11 @@ export const handlers = [
         },
       })
     }
-    if (capability === 'requirement_doc_assist' || capability === 'requirement_module_doc_assist') {
+    if (
+      capability === 'requirement_doc_assist' ||
+      capability === 'requirement_module_doc_assist' ||
+      capability === 'tech_design_doc_assist'
+    ) {
       const payload = body.payload ?? {}
       const action = String(payload?.action ?? 'chat')
       const message = String(payload?.message ?? '').trim()
@@ -927,7 +1121,34 @@ export const handlers = [
 
       if (action === 'generate_doc') {
         const excerpt = message ? message.slice(0, 120) : '（未提供具体诉求）'
-        const doc = `# 需求文档
+        const doc =
+          capability === 'tech_design_doc_assist'
+            ? `# 技术设计文档
+
+## 技术栈与运行环境
+- 诉求摘要：${excerpt}
+- 前端 / 后端 / 数据库 / 中间件 / 部署方式：（待你在对话中确认）
+
+## 系统上下文与架构
+- 系统边界与外部依赖：（待确认）
+- 分层与模块调用关系：（待确认）
+
+## 模块与职责
+- （与需求模块对齐的边界说明 1）
+- （与需求模块对齐的边界说明 2）
+
+## 数据与接口边界
+- 核心实体与归属：（待确认）
+- 对外 API 概要：详见接口管理模块落地后同步
+
+## 非功能需求
+- 性能 / 安全 / 可用性 / 可观测性：（待量化或标注待确认）
+
+## 风险与待定项
+- 依赖与排期风险：（待确认）
+- 与需求未对齐处：标注「待确认」并列跟进人
+`
+            : `# 需求文档
 
 ## 目标
 - 目标概述：${excerpt}
@@ -970,6 +1191,17 @@ export const handlers = [
         })
       }
 
+      const suggestLead =
+        capability === 'tech_design_doc_assist'
+          ? `### 下一步我需要你确认/补充的点
+- 技术栈是否已冻结？与项目详情中的填写是否一致？
+- 架构上最关键的边界是什么（鉴权、多租户、数据一致性）？
+- 非功能指标里哪一条是硬约束（延迟、吞吐、RPO/RTO）？`
+          : `### 下一步我需要你确认/补充的点
+- 你的「目标」具体是什么？可否用一句话 + 一个可衡量指标描述？
+- 「功能清单」你希望粒度到什么层级？（页面级 / 模块级 / 条目级）
+- 交互流程里，你最关心哪一个异常场景？（版本冲突 / 输入缺失 / 解析失败）`
+
       return HttpResponse.json({
         code: 0,
         message: 'ok',
@@ -980,14 +1212,76 @@ export const handlers = [
 ### 你提出的诉求
 ${message || '（未提供）'}
 
-### 下一步我需要你确认/补充的点
-- 你的「目标」具体是什么？可否用一句话 + 一个可衡量指标描述？
-- 「功能清单」你希望粒度到什么层级？（页面级 / 模块级 / 条目级）
-- 交互流程里，你最关心哪一个异常场景？（版本冲突 / 输入缺失 / 解析失败）
+${suggestLead}
 
 ### 当前文档状态
 - 已有行数：${lineCount}
 ${modHint}
+`,
+        },
+      })
+    }
+    if (capability === 'tech_selection_assist') {
+      const payload = body.payload ?? {}
+      const action = String(payload?.action ?? 'chat')
+      const message = String(payload?.message ?? '').trim()
+      const existing = normalizeTechDeliveryPartsFromUnknown(payload.tech_delivery_parts)
+
+      if (action === 'generate_tech_selection') {
+        const hist = Array.isArray(payload.history) ? payload.history : []
+        const lastUser = [...hist].reverse().find((m) => {
+          if (!m || typeof m !== 'object') return false
+          return (m as { role?: string }).role === 'user'
+        }) as { content?: string } | undefined
+        const hint = (lastUser?.content ?? message).trim().slice(0, 80) || '未命名场景'
+
+        const parts: TechDeliveryPart[] = [
+          {
+            id: `tdp-ai-${Date.now()}-a`,
+            delivery_kind: 'website',
+            technologies: 'Vue 3、TypeScript、Element Plus',
+            database: '—（浏览器侧）',
+            architecture: `对标「${hint}」的 SPA；鉴权 Bearer；与 OpenAPI 契约对齐（Mock）`,
+          },
+          {
+            id: `tdp-ai-${Date.now()}-b`,
+            delivery_kind: 'api_service',
+            technologies: 'Python、FastAPI',
+            database: 'PostgreSQL、Redis',
+            architecture: '分层 + JWT；AI 经 ai_gateway（Mock）',
+          },
+        ]
+
+        return HttpResponse.json({
+          code: 0,
+          message: 'ok',
+          data: {
+            capability,
+            summary_markdown: `已根据对话生成 **${parts.length}** 条交付部分草案。请在对比弹窗中核对后点 **接受** 填入表单；再点 **确定保存** 写入项目。`,
+            tech_delivery_parts: parts,
+          },
+        })
+      }
+
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          capability,
+          suggestion: `## 技术选型讨论（Mock）
+
+### 本轮输入
+${message || '（无）'}
+
+### 当前表单
+已有 **${existing.length}** 条交付部分。
+
+### 建议继续说明
+- 是否要 **多端统一账号**（SSO / OAuth2）
+- **数据**：主从、缓存、消息队列是否需要
+- **部署**：内网 / 公有云 / 混合
+
+讨论完成后点击 **「根据对话生成技术选型并预览」**。
 `,
         },
       })

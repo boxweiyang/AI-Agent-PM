@@ -42,13 +42,15 @@
 | `src/utils/headerBreadcrumbs.ts` | 顶栏面包屑数据：`工作台` / `项目管理` / 设置子路径 / 项目内 `项目名` 与 `meta.title` |
 | `src/components/TechStackMultiSelect/` | 项目详情：技术栈 **多选下拉**（`el-select` multiple + allow-create）；见 **README** |
 | `src/config/techStackOptions.ts` | 四类技术栈 **预设选项** + 字符串与数组互转（`parseStackItems` / `joinStackItems`） |
+| `src/config/techDeliveryPartKinds.ts` | REQ-M02B **技术选型**交付形态选项（网站、App、小程序等） |
 | `src/config/projectSidebarNav.ts` | **项目内**侧栏分组（概览 + 各 REQ 模块；路由名与 `projectLayoutRoutes` 一致） |
 | `src/config/projectRelatedModules.ts` | **项目内**模块路由清单（与 `artifacts` 键对齐；由 `projectLayoutRoutes.ts` 注册） |
 | `src/features/auth/pages/Login.vue` | 登录页（Mock：`admin` / 任意密码） |
 | `src/features/workspace/routes.ts` | **工作台子路由**：`/`、`/projects`、`/enter-last-project`、`/settings/*`（挂到 `/` 下） |
-| `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：Dashboard、`detail`、**`m02/requirements`（列表 + 总文档详情 + 模块细化详情）**、其余占位 |
-| `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`pages/requirements/*`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue`、`components/DashboardEchart.vue` |
+| `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：Dashboard、`detail`、**`m02/requirements`**、**`m02b/design`（技术设计列表+详情）**、其余占位 |
+| `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`pages/requirements/*`、`pages/design/*`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue`、`components/DashboardEchart.vue` |
 | `src/utils/requirementDocExport.ts` | 需求文档 **导出 MD/HTML** 与 **打印为 PDF**（`marked`） |
+| `src/utils/techDeliveryPartsNormalize.ts` | **`TechDeliveryPart[]`** JSON 规范化 + **选型表文本化**（技术选型 diff / MSW） |
 | `src/utils/inlineTextDiff.ts` | **`DiffDialog`** 中「修改」行的 **字词/字符级** 片段（`diff`：`diffChars` / `diffWordsWithSpace`） |
 | `src/utils/aiAssistDiffGrid.ts` | 行级 LCS 网格数据，供 **`DiffDialog`** 渲染 |
 | `src/components/DiffDialog/` | 公用 **差异弹窗**（`index.ts` 默认导出）；**`AiAssistDrawer`** 等调用方按需传入表头与文案 |
@@ -56,6 +58,8 @@
 | `diff`（`package.json`） | 行内文本对比（`inlineTextDiff`） |
 | `src/mocks/requirementDocStore.ts` | MSW 内存：**总需求文档**版本链 |
 | `src/mocks/requirementModuleDocStore.ts` | MSW：**模块细化**（模块元数据 + 每模块版本链、**`ai-split`** 演示数据） |
+| `src/mocks/techDesignDocStore.ts` | MSW：**技术设计总文档**版本链（REQ-M02B） |
+| `src/config/aiPromptTemplates.ts` | 需求 / **技术设计** AI 默认与外部提示词模板 |
 | `src/features/workspace/dashboardChartOptions.ts` | Dashboard **ECharts option** 生成（Mock），由 `buildProjectDashboard` 组装进 `cards[].charts` |
 | `echarts`（`package.json`） | Dashboard 卡片内图表（core 按需注册于 `DashboardEchart.vue`） |
 | `src/features/workspace/pages/ProjectDetail.vue` | 项目详情（`.../detail`；GET/PATCH 单项目） |

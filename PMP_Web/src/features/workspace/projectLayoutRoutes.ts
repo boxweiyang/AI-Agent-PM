@@ -2,8 +2,10 @@ import type { RouteRecordRaw } from 'vue-router'
 
 import { PROJECT_RELATED_MODULES } from '@/config/projectRelatedModules'
 
-/** REQ-M02：需求与文档已接真实工作台，其余模块仍为占位 */
-const PLACEHOLDER_MODULES = PROJECT_RELATED_MODULES.filter((m) => m.name !== 'project-m02-requirements')
+/** 已接真实页面的模块路由名（其余走占位页） */
+const IMPLEMENTED_PROJECT_MODULE_NAMES = new Set(['project-m02-requirements', 'project-m02b-design'])
+
+const PLACEHOLDER_MODULES = PROJECT_RELATED_MODULES.filter((m) => !IMPLEMENTED_PROJECT_MODULE_NAMES.has(m.name))
 
 const projectModuleChildren: RouteRecordRaw[] = PLACEHOLDER_MODULES.map((m) => ({
   path: m.path,
@@ -47,6 +49,18 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     name: 'project-m02-requirements',
     component: () => import('./pages/requirements/RequirementDocListPage.vue'),
     meta: { title: '需求与文档', artifactKey: 'req_doc', reqRef: 'REQ-M02' },
+  },
+  {
+    path: 'm02b/design/versions/:versionId',
+    name: 'project-m02b-design-version',
+    component: () => import('./pages/design/TechDesignDocVersionDetailPage.vue'),
+    meta: { title: '技术设计文档', artifactKey: 'tech_design', reqRef: 'REQ-M02B' },
+  },
+  {
+    path: 'm02b/design',
+    name: 'project-m02b-design',
+    component: () => import('./pages/design/TechDesignDocListPage.vue'),
+    meta: { title: '技术设计', artifactKey: 'tech_design', reqRef: 'REQ-M02B' },
   },
   ...projectModuleChildren,
 ]

@@ -4,8 +4,8 @@
     v-model="proposeDiffOpen"
     :old-text="proposeOldText"
     :new-text="proposeNewText"
-    left-header="原版（当前正文）"
-    right-header="新版（AI 建议）"
+    :left-header="diffLeftHeaderEffective"
+    :right-header="diffRightHeaderEffective"
     :allow-accept="allowApply"
     :deny-accept-message="allowApplyMessage"
     @accept="onProposeDiffAccept"
@@ -71,7 +71,7 @@
           v-model="userInput"
           type="textarea"
           :rows="3"
-          placeholder="像你现在这样补充需求/澄清问题，然后发送"
+          :placeholder="chatInputPlaceholder"
           class="chat-input"
           @keyup.enter="onEnterToSend"
         />
@@ -83,18 +83,48 @@
             :loading="generatingDoc"
             @click="generateDoc"
           >
-            按现有需求生成文档并应用到正文
+            {{ generateButtonLabel }}
           </el-button>
         </div>
       </div>
     </div>
 
     <div v-else class="external-body">
-      <p class="ai-sub-hint">复制提示词到外部 AI 使用。</p>
-      <div class="ai-actions">
-        <el-button size="small" @click="copyExternalPrompt">复制提示词</el-button>
-      </div>
-      <el-input v-model="externalPromptText" type="textarea" readonly class="external-prompt-input" />
+      <template v-if="assistKind === 'tech_selection'">
+        <p class="ai-sub-hint">
+          ① 复制提示词到外置 AI 讨论；② 请外置 AI 按提示输出 **JSON**；③ 将完整回复粘贴到「回填结果」，点击 **解析并预览填入**（与站内一致，先 diff 再接受）。
+        </p>
+        <div class="ai-actions">
+          <el-button size="small" @click="copyExternalPrompt">复制提示词</el-button>
+        </div>
+        <el-input
+          v-model="externalPromptText"
+          type="textarea"
+          readonly
+          :rows="7"
+          class="external-prompt-readonly"
+        />
+        <p class="ai-sub-hint external-paste-title">回填结果</p>
+        <el-input
+          v-model="externalPasteJson"
+          type="textarea"
+          :rows="11"
+          class="external-paste-input"
+          placeholder='粘贴 JSON：支持 [ {...}, {...} ] 或 { "tech_delivery_parts": [...] }，也可带 ```json 代码块'
+        />
+        <div class="ai-actions">
+          <el-button type="primary" size="small" :loading="externalParsing" @click="applyExternalTechSelectionPaste">
+            解析并预览填入
+          </el-button>
+        </div>
+      </template>
+      <template v-else>
+        <p class="ai-sub-hint">复制提示词到外部 AI；将生成内容自行粘贴回 **编辑区** 或切换到 **站内 AI** 继续。</p>
+        <div class="ai-actions">
+          <el-button size="small" @click="copyExternalPrompt">复制提示词</el-button>
+        </div>
+        <el-input v-model="externalPromptText" type="textarea" readonly :rows="12" class="external-prompt-input" />
+      </template>
     </div>
   </el-drawer>
 </template>
@@ -105,7 +135,12 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 import DiffDialog from '@/components/DiffDialog'
 import { apiClient } from '@/api/client'
-import type { ApiEnvelope } from '@/types/api-contract'
+import type { ApiEnvelope, TechDeliveryPart } from '@/types/api-contract'
+import {
+  formatTechDeliveryPartsForDiff,
+  normalizeTechDeliveryPartsFromUnknown,
+  parseTechDeliveryPartsExternalPaste,
+} from '@/utils/techDeliveryPartsNormalize'
 
 const props = withDefaults(
   defineProps<{
@@ -129,6 +164,12 @@ const props = withDefaults(
     /** 为 false 时 diff 弹窗内「接受」将被拦截（如历史版本只读） */
     allowApply?: boolean
     allowApplyMessage?: string
+    /** `markdown_doc`：生成 Markdown 正文；`tech_selection`：生成 `tech_delivery_parts` 并 diff 后写入表单 */
+    assistKind?: 'markdown_doc' | 'tech_selection'
+    /** `assistKind=tech_selection` 时传入，用于 diff 左侧与 payload */
+    techSelectionParts?: TechDeliveryPart[]
+    diffLeftHeader?: string
+    diffRightHeader?: string
   }>(),
   {
     title: 'AI 辅助',
@@ -141,12 +182,17 @@ const props = withDefaults(
     anchorAssistantId: null,
     allowApply: true,
     allowApplyMessage: '历史版本不允许写入，请打开最新版本',
+    assistKind: 'markdown_doc',
+    techSelectionParts: () => [],
+    diffLeftHeader: '',
+    diffRightHeader: '',
   },
 )
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'apply', payload: { assistantId: string; text: string }): void
+  (e: 'apply-tech-parts', payload: { assistantId: string; parts: TechDeliveryPart[] }): void
   (e: 'generated', text: string): void
 }>()
 
@@ -163,6 +209,9 @@ const provider = ref<'qwen' | 'doubao' | 'kimi' | 'gemini'>('qwen')
 const userInput = ref('')
 const messages = ref<ChatMessage[]>([])
 const externalPromptText = ref('')
+/** 外置 AI 结构化回填（技术选型）：用户粘贴 JSON */
+const externalPasteJson = ref('')
+const externalParsing = ref(false)
 const hasInitedPrompt = ref(false)
 const historyEl = ref<HTMLElement | null>(null)
 const sending = ref(false)
@@ -174,6 +223,30 @@ const proposeDiffOpen = ref(false)
 const proposeOldText = ref('')
 const proposeNewText = ref('')
 const proposeAssistantId = ref<string | null>(null)
+/** `assistKind=tech_selection` 且 diff 打开时，接受后写入表单的结构化数据 */
+const proposePendingTechParts = ref<TechDeliveryPart[] | null>(null)
+
+const diffLeftHeaderEffective = computed(() => {
+  if (props.diffLeftHeader?.trim()) return props.diffLeftHeader.trim()
+  return props.assistKind === 'tech_selection' ? '当前选型（表单）' : '原版（当前正文）'
+})
+
+const diffRightHeaderEffective = computed(() => {
+  if (props.diffRightHeader?.trim()) return props.diffRightHeader.trim()
+  return props.assistKind === 'tech_selection' ? 'AI 建议选型' : '新版（AI 建议）'
+})
+
+const generateButtonLabel = computed(() =>
+  props.assistKind === 'tech_selection'
+    ? '根据对话生成技术选型并预览'
+    : '按现有需求生成文档并应用到正文',
+)
+
+const chatInputPlaceholder = computed(() =>
+  props.assistKind === 'tech_selection'
+    ? '描述业务场景、性能/安全约束、团队技能偏好等，与 AI 讨论后再生成选型表'
+    : '像你现在这样补充需求/澄清问题，然后发送',
+)
 
 const effectiveDocumentBaseline = computed(() => {
   if (props.documentText !== undefined && props.documentText !== null) return props.documentText
@@ -249,9 +322,11 @@ function onUpdateModelValue(v: boolean) {
 
 function onOpen() {
   externalPromptText.value = (props.externalPrompt ?? props.defaultPrompt ?? '').trim()
+  externalPasteJson.value = ''
   userInput.value = ''
   sending.value = false
   generatingDoc.value = false
+  externalParsing.value = false
   hasInitedPrompt.value = true
 
   // 每次打开都尝试加载长期记忆（按 project + version）
@@ -287,7 +362,7 @@ function pickText(resp: unknown): string {
   return JSON.stringify(r, null, 2)
 }
 
-async function invokeAi(action: 'chat' | 'generate_doc', message?: string) {
+async function invokeAi(action: 'chat' | 'generate_doc' | 'generate_tech_selection', message?: string) {
   const historyLite = messages.value
     .slice(-12)
     .map((m) => ({ role: m.role, content: m.content }))
@@ -374,9 +449,60 @@ async function sendMessage() {
   }
 }
 
+async function generateTechSelection() {
+  if (mode.value !== 'builtin') return
+  if (generatingDoc.value) return
+  if (messages.value.filter((m) => m.role === 'user').length === 0) {
+    ElMessage.warning('请先发送至少一条对话，说明目标与约束')
+    return
+  }
+  if (messages.value.some((m) => m.role === 'assistant' && m.streaming)) return
+
+  generatingDoc.value = true
+  try {
+    const assistantId = nextId('a')
+    messages.value.push({ id: assistantId, role: 'assistant', content: '', waiting: true })
+    scrollToBottom()
+
+    const resp = await invokeAi('generate_tech_selection')
+    const data = resp as Record<string, unknown>
+    const parts = normalizeTechDeliveryPartsFromUnknown(data.tech_delivery_parts)
+    const summary =
+      typeof data.summary_markdown === 'string' && data.summary_markdown.trim()
+        ? data.summary_markdown.trim()
+        : `已生成 **${parts.length}** 条交付部分建议，请在对比弹窗中核对后点击「接受」填入表单。`
+
+    const row = messages.value.find((x) => x.id === assistantId)
+    if (row) {
+      row.waiting = false
+      row.streaming = false
+      row.content = summary
+    }
+
+    if (!parts.length) {
+      ElMessage.error('AI 未返回有效的技术选型数据，请重试')
+      return
+    }
+
+    proposePendingTechParts.value = parts
+    proposeOldText.value = formatTechDeliveryPartsForDiff(props.techSelectionParts ?? [])
+    proposeNewText.value = formatTechDeliveryPartsForDiff(parts)
+    proposeAssistantId.value = assistantId
+    proposeDiffOpen.value = true
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : 'AI 生成失败')
+  } finally {
+    generatingDoc.value = false
+  }
+}
+
 async function generateDoc() {
   if (mode.value !== 'builtin') return
   if (generatingDoc.value) return
+  if (props.assistKind === 'tech_selection') {
+    await generateTechSelection()
+    return
+  }
   if (messages.value.filter((m) => m.role === 'user').length === 0) {
     ElMessage.warning('请先发送至少一条需求沟通')
     return
@@ -448,8 +574,15 @@ function onProposeDiffAccept() {
   const aid = proposeAssistantId.value
   if (!aid) return
   truncateHistoryToAssistantId(aid)
-  emit('apply', { assistantId: aid, text: proposeNewText.value })
-  ElMessage.success('已接受修改并应用到正文')
+  const pending = proposePendingTechParts.value
+  if (pending && pending.length > 0) {
+    emit('apply-tech-parts', { assistantId: aid, parts: pending })
+    proposePendingTechParts.value = null
+    ElMessage.success('已填入表单，可继续编辑后点「确定保存」写入项目')
+  } else {
+    emit('apply', { assistantId: aid, text: proposeNewText.value })
+    ElMessage.success('已接受修改并应用到正文')
+  }
   emit('update:modelValue', false)
   proposeAssistantId.value = null
 }
@@ -457,6 +590,7 @@ function onProposeDiffAccept() {
 function onProposeDiffRollback() {
   truncateHistoryToAssistantId(props.anchorAssistantId ?? null)
   proposeAssistantId.value = null
+  proposePendingTechParts.value = null
 }
 
 defineExpose({
@@ -479,6 +613,28 @@ async function copyExternalPrompt() {
     ElMessage.success('提示词已复制')
   } catch {
     ElMessage.warning('复制失败，请手动复制')
+  }
+}
+
+function applyExternalTechSelectionPaste() {
+  if (props.assistKind !== 'tech_selection') return
+  externalParsing.value = true
+  try {
+    const parts = parseTechDeliveryPartsExternalPaste(externalPasteJson.value)
+    if (!parts?.length) {
+      ElMessage.error(
+        '无法解析：请粘贴合法 JSON 数组，或含 tech_delivery_parts 的对象（支持 ```json 代码块）。字段需含 delivery_kind。',
+      )
+      return
+    }
+    proposePendingTechParts.value = parts
+    proposeOldText.value = formatTechDeliveryPartsForDiff(props.techSelectionParts ?? [])
+    proposeNewText.value = formatTechDeliveryPartsForDiff(parts)
+    proposeAssistantId.value = nextId('ext')
+    proposeDiffOpen.value = true
+    ElMessage.success('已打开对比，确认后点击「接受」填入表单')
+  } finally {
+    externalParsing.value = false
   }
 }
 </script>
@@ -653,6 +809,32 @@ async function copyExternalPrompt() {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.external-paste-title {
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+.external-paste-input {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.external-paste-input :deep(.el-textarea__inner) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.external-prompt-readonly {
+  flex: 0 0 auto;
+}
+
+.external-prompt-readonly :deep(.el-textarea__inner) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .external-prompt-input {

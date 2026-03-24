@@ -53,7 +53,9 @@
 | `/projects/:projectId/m02/requirements` | 需求与文档（版本列表） | `ProjectLayout` + `requirements/RequirementDocListPage.vue` | REQ-M02；**Tab**：总 **`需求文档`** / **`模块细化文档`**（`?tab=modules`）；总文档 API + 模块树 API（见契约 **v0.3.0**）；**勾选两版** + **`DiffDialog` 只读** |
 | `/projects/:projectId/m02/requirements/versions/:versionId` | 需求文档版本详情 | `ProjectLayout` + `requirements/RequirementDocVersionDetailPage.vue` | Markdown 编辑/预览；保存 **新建 / 覆盖**；**`capability: requirement_doc_assist`** + diff |
 | `/projects/:projectId/m02/requirements/modules/:moduleId/versions/:versionId` | 模块细化文档版本详情 | `ProjectLayout` + `requirements/RequirementModuleDocVersionDetailPage.vue` | 与总文档详情能力对齐；**`capability: requirement_module_doc_assist`**；保存后回列表并带 **`?tab=modules`** |
-| `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02B～M11；`artifacts` 驱动已生成/去生成 |
+| `/projects/:projectId/m02b/design` | 技术设计（工作台） | `ProjectLayout` + `design/TechDesignDocListPage.vue` | REQ-M02B；需求弹窗；**技术选型** + **`tech_selection_assist` AI**；`tech_delivery_parts` **PATCH**（**v0.3.2**）；**技术设计文档** 版本列表 |
+| `/projects/:projectId/m02b/design/versions/:versionId` | 技术设计版本详情 | `ProjectLayout` + `design/TechDesignDocVersionDetailPage.vue` | Markdown 编辑/预览；保存 **新建 / 覆盖**；**`capability: tech_design_doc_assist`** |
+| `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02C～M11（除已落地路径）；`artifacts` 驱动已生成/去生成 |
 
 ---
 
@@ -124,9 +126,15 @@
 - **详情（总 / 模块）**：**编辑 / 预览**；仅 **最新** 可 **保存**（新建版本 / 覆盖）；**AI 抽屉** 分别 **`requirement_doc_assist`** / **`requirement_module_doc_assist`**；模块详情保存后回 **`?tab=modules`**。
 - **`artifacts.req_doc`**：未生成时与占位页一致，**一键生成** 后可用上述接口。
 
-## 6.1.3 项目内模块占位页
+## 6.1.3 `/projects/:projectId/m02b/design` 技术设计（REQ-M02B，V1）
 
-- **路径**：`/projects/:projectId/<模块路径>`（如 `m02b/design`）；**`m02/requirements` 已接真实页，不在此列**。
+- **布局（自上而下）**：① **需求对照**：**查看最新版需求文档**（弹窗 Markdown 预览，可 **下载 MD/HTML/PDF**）；未生成 **`artifacts.req_doc`** 时按钮禁用。② **技术选型**：**AI 辅助选型**（`tech_selection_assist`，先对话再 **根据对话生成技术选型并预览**）→ **`DiffDialog`** 对比表单与建议 → **接受** 填入；**确定保存** → **`PATCH /api/v1/projects/{id}`** 的 **`tech_delivery_parts`（整表替换）**（**v0.3.2** `TechDeliveryPart` + invoke 说明）。③ **技术设计文档**：**`artifacts.tech_design`** 未生成时 **一键生成（演示）**；已生成则 **版本列表**（与需求总文档列表同构：两版 **`DiffDialog` 只读**、导出、创建/删除、打开详情）。
+- **技术文档契约**：**`GET/POST/PATCH/DELETE …/tech-design-doc/versions`**（**v0.3.1** 起，`tech-design-doc` tag），字段与 **`…/requirement-doc/versions`** 相同。MSW：**`techDesignDocStore.ts`** + **`handlers.ts`**；**`proj-demo-1`** 预置技术选型两行 + 技术文档两版。
+- **详情页**：**`tech_design_doc_assist`**；保存后回列表。
+
+## 6.1.4 项目内模块占位页
+
+- **路径**：`/projects/:projectId/<模块路径>`（如 `m02c/apis`）；**`m02/requirements` 与 `m02b/design` 已接真实页，不在此列**。
 - **已生成**（`artifacts[键]===true`）：成功态说明，后续可替换为真实工作台。
 - **未生成**：**一键生成（演示）** 调用 **PATCH** 合并 `artifacts`，再可进入已生成态；**返回项目详情** 回到概览。
 
@@ -170,6 +178,9 @@
 | 2026-03-24 | **`src/components/`** 改为**一组件一文件夹**（`index.ts` 默认导出 + **README**）；可复用 UI 提至顶层（如 **`DiffDialog`**）。约定见 **`components/README.md`**。 |
 | 2026-03-24 | **需求文档列表**：表格 **勾选两版** + **`DiffDialog`** **`readOnly`** 对比正文（无接受/回退）；**`DiffDialog`** 新增 `title` / `readOnly`。 |
 | 2026-03-24 | **REQ-M02 模块细化**：契约 **v0.3.0**；列表页 **双 Tab**；**AI 拆分** + 可展开模块/版本表；**`RequirementModuleDocVersionDetailPage`**；MSW **`requirementModuleDocStore`**；AI Mock 支持 **`requirement_module_doc_assist`**。 |
+| 2026-03-24 | **REQ-M02B 技术设计**：契约 **v0.3.1** `tech-design-doc`；**`TechDesignDocListPage` / `TechDesignDocVersionDetailPage`**（列表+详情，对齐需求文档）；MSW **`techDesignDocStore`**；**`tech_design_doc_assist`**。 |
+| 2026-03-24 | **技术设计工作台**：需求**最新版弹窗**+下载；**`tech_delivery_parts` 技术选型**（**v0.3.2** `TechDeliveryPart`，PATCH 整表替换）；列表页三段布局；**`techDeliveryPartKinds.ts`**。 |
+| 2026-03-24 | **技术选型 AI**：**`tech_selection_assist`** + **`AiAssistDrawer`** `assistKind=tech_selection`；**`techDeliveryPartsNormalize.ts`**（规范化与 diff 文本）；MSW **`generate_tech_selection`**。 |
 
 ---
 

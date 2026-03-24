@@ -5,7 +5,7 @@ info:
     前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
 
     **鉴权（V1）**：账号密码登录；Access JWT（Bearer）；Refresh 见 TECH-004（实现可选 Cookie HttpOnly；契约中 Body 字段保留作备选）。
-  version: 0.3.0-draft
+  version: 0.3.2-draft
 
 servers:
   - url: http://127.0.0.1:8000
@@ -23,6 +23,9 @@ tags:
   - name: requirement-doc
     description: |
       REQ-M02 需求文档：总文档 Markdown 版本链；**模块细化文档**（按模块拆分、每模块独立版本链、AI 模块化拆分）。
+  - name: tech-design-doc
+    description: |
+      REQ-M02B **总技术文档** Markdown 版本链（与需求总文档字段形态一致；L2 分模块设计可后续扩展独立资源）。
 
 paths:
   /api/v1/health:
@@ -428,6 +431,190 @@ paths:
       summary: 删除指定版本
       description: 删除后 `latest_version_id` 为剩余版本中 `version_no` 最大者。
       operationId: deleteRequirementDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 版本不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/tech-design-doc/versions:
+    get:
+      tags: [tech-design-doc]
+      summary: 技术设计总文档 — 版本列表
+      description: |
+        REQ-M02B：与 `…/requirement-doc/versions` 行为一致（`version_no` 升序、`latest_version_id` 语义相同）。
+      operationId: listTechDesignDocVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    post:
+      tags: [tech-design-doc]
+      summary: 创建技术设计版本或从最新版保存为新版本
+      description: |
+        请求体与 `POST …/requirement-doc/versions` 相同：`mode` 或 `markdown` + `based_on_version_id`。
+      operationId: postTechDesignDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionCreateOrAppend"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "400":
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/tech-design-doc/versions/{versionId}:
+    get:
+      tags: [tech-design-doc]
+      summary: 获取技术设计指定版本详情
+      operationId: getTechDesignDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 版本不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    patch:
+      tags: [tech-design-doc]
+      summary: 覆盖技术设计当前最新版本正文
+      operationId: patchTechDesignDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "400":
+          description: 非最新版本禁止覆盖
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    delete:
+      tags: [tech-design-doc]
+      summary: 删除技术设计指定版本
+      operationId: deleteTechDesignDocVersion
       security:
         - bearerAuth: []
       parameters:
@@ -951,6 +1138,15 @@ paths:
         对于 `capability = requirement_module_doc_assist`（REQ-M02 **模块细化**文档协作）：
         - 与 `requirement_doc_assist` 相同 `payload.action` 语义；建议 `payload` 携带 `module_id`、`module_title` 等便于 Agent 聚焦单模块。
         - 响应字段同样为 `data.suggestion` / `data.markdown`（按 action）。
+
+        对于 `capability = tech_design_doc_assist`（REQ-M02B **技术设计总文档**协作）：
+        - 与 `requirement_doc_assist` 相同 `payload.action` 语义（`chat` / `generate_doc`）。
+        - 建议 `payload` 携带 `project_id`、`version_id`、`version_no`、`markdown`；响应仍为 `data.suggestion` / `data.markdown`。
+
+        对于 `capability = tech_selection_assist`（REQ-M02B **技术选型**表单协作）：
+        - `payload.action = chat`：响应 `data.suggestion`（讨论与追问）。
+        - `payload.action = generate_tech_selection`：在至少一轮用户对话后调用；建议 `payload` 含 `tech_delivery_parts`（当前表单快照）、`history`（与文档协作相同结构）。
+        - 成功响应：`data.tech_delivery_parts`（`TechDeliveryPart[]`，**整表建议**）、`data.summary_markdown`（可选，用于聊天区摘要）；**不**使用 `data.markdown`。
       requestBody:
         required: true
         content:
@@ -1184,6 +1380,41 @@ components:
             `dashboard_board`、`closure_pack`、`ai_workspace` 等；值为 true 表示已生成可进入工作台。
           additionalProperties:
             type: boolean
+        tech_delivery_parts:
+          type: array
+          description: |
+            REQ-M02B **技术选型**：项目交付形态拆分（网站、App、小程序、后端等），每段独立填写技术栈、数据库、架构等关键决策。
+            **PATCH** 时若出现本字段则 **整表替换**（不出现则不改）。
+          items:
+            $ref: "#/components/schemas/TechDeliveryPart"
+
+    TechDeliveryPart:
+      type: object
+      required: [id, delivery_kind]
+      properties:
+        id:
+          type: string
+          description: 前端生成的稳定 id（UUID 或时间戳随机后缀），用于列表行 key 与排序
+        delivery_kind:
+          type: string
+          description: |
+            交付形态编码，建议：`website` | `mobile_app` | `desktop_exe` | `mini_program` |
+            `api_service` | `ops_tool` | `other`
+        custom_label:
+          type: string
+          description: `delivery_kind=other` 时的展示名，或其它情况下可选备注名
+        technologies:
+          type: string
+          description: 该部分采用的主要技术 / 框架（可多值，顿号或换行分隔）
+        database:
+          type: string
+          description: 该部分涉及的数据库或存储（无则填「无」或「共用」）
+        architecture:
+          type: string
+          description: 架构要点（分层、部署形态、与其它部分的关系等）
+        notes:
+          type: string
+          description: 其它说明（可选）
 
     DashboardIterationOption:
       type: object
@@ -1360,6 +1591,11 @@ components:
           type: object
           additionalProperties:
             type: boolean
+        tech_delivery_parts:
+          type: array
+          description: 若出现则 **整表替换** 项目技术选型（REQ-M02B）
+          items:
+            $ref: "#/components/schemas/TechDeliveryPart"
 
     ProjectCreateRequest:
       type: object
@@ -1427,6 +1663,10 @@ components:
           type: string
         manpower_stack_deferred:
           type: boolean
+        tech_delivery_parts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TechDeliveryPart"
 
     EnvelopeHealth:
       allOf:

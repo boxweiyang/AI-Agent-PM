@@ -51,13 +51,17 @@ AiAssistDrawer
 | `documentText` | 建议与编辑区同步，供 diff 左侧 |
 | `anchorAssistantId` | diff 回退时对话截断锚点 |
 | `allowApply` / `allowApplyMessage` | 传给 **`DiffDialog`**，控制是否允许点「接受」 |
+| `assistKind` | `markdown_doc`（默认）或 **`tech_selection`**：后者走 `generate_tech_selection`，diff 左右为选型文本，接受时发 **`apply-tech-parts`** |
+| `techSelectionParts` | `assistKind=tech_selection` 时传入当前表单行，写入 payload 并作为 diff 左侧 |
+| `diffLeftHeader` / `diffRightHeader` | 可选，覆盖 diff 表头 |
 
 ### Emits
 
 | 事件 | 说明 |
 |------|------|
 | `update:modelValue` | 抽屉显隐 |
-| `apply` | `{ assistantId, text }`，用户确认写入的全文 |
+| `apply` | `{ assistantId, text }`，用户确认写入的全文（Markdown 文档场景） |
+| `apply-tech-parts` | `{ assistantId, parts }`，**技术选型**接受 diff 后填入表单的 `TechDeliveryPart[]` |
 | `generated` | chat 返回文本（可选） |
 
 ### `defineExpose`
@@ -66,7 +70,19 @@ AiAssistDrawer
 
 ### `/api/v1/ai/invoke`
 
-请求 `payload` 含 `payloadBase` 展开、`provider`、`action`（`chat` | `generate_doc`）、`message`、`default_prompt`、`history`。响应 `data` 经 `pickText` 解析（`markdown` → `document` → …）。
+请求 `payload` 含 `payloadBase` 展开、`provider`、`action`、`message`、`default_prompt`、`history`。
+
+- **`assistKind=markdown_doc`（默认）**：`action` 为 `chat` | `generate_doc`；响应 `data` 经 `pickText`（`markdown` → `document` → …）。
+- **`assistKind=tech_selection`**：`action` 为 `chat` | **`generate_tech_selection`**；成功时响应含 **`data.tech_delivery_parts`**（数组）与可选 **`data.summary_markdown`**。
+
+### 外置 AI 回填（`外置 AI 回填` 分栏）
+
+| `assistKind` | 交互 |
+|--------------|------|
+| **`markdown_doc`（默认）** | 只读 **提示词** + 复制；生成内容请 **粘贴回编辑器**，或改回 **站内 AI**。 |
+| **`tech_selection`** | 只读 **提示词** + 复制；下方 **回填结果** 多行输入框粘贴外置 AI 返回的 **JSON**（数组或 `{ "tech_delivery_parts": [] }`，支持 \`\`\`json 围栏）→ **解析并预览填入** → 与站内相同 **`DiffDialog`** → **接受** 后 **`apply-tech-parts`**。 |
+
+解析工具：`parseTechDeliveryPartsExternalPaste`（`utils/techDeliveryPartsNormalize.ts`）。
 
 ---
 

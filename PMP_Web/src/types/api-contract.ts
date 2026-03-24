@@ -42,6 +42,17 @@ export type AuthLoginData = {
 /** POST /api/v1/auth/refresh 成功载荷（与登录类似，含轮换后的 token 对） */
 export type AuthRefreshData = AuthLoginData
 
+/** 项目级技术选型条目（契约 `TechDeliveryPart`） */
+export type TechDeliveryPart = {
+  id: string
+  delivery_kind: string
+  custom_label?: string
+  technologies?: string
+  database?: string
+  architecture?: string
+  notes?: string
+}
+
 /** GET /api/v1/projects 列表项（工作台卡片；字段均可选扩展，缺省由前端显示「—」） */
 export type ProjectSummary = {
   id: string
@@ -82,6 +93,8 @@ export type ProjectSummary = {
   planned_end_at?: string
   /** 各模块资产是否已生成（键如 req_doc、tech_design，见 OpenAPI 说明） */
   artifacts?: Record<string, boolean>
+  /** REQ-M02B 技术选型：按交付形态拆分的技术栈 / 库 / 架构决策 */
+  tech_delivery_parts?: TechDeliveryPart[]
 }
 
 export type ProjectListData = {
@@ -111,6 +124,7 @@ export type ProjectCreateRequestBody = {
   scope_out?: string
   risk_notes?: string
   manpower_stack_deferred?: boolean
+  tech_delivery_parts?: TechDeliveryPart[]
 }
 
 /** PATCH /api/v1/projects/{projectId}（契约 ProjectPatchRequest） */
@@ -136,6 +150,8 @@ export type ProjectPatchRequestBody = {
   risk_notes?: string
   manpower_stack_deferred?: boolean
   artifacts?: Record<string, boolean>
+  /** 若传入则整表替换 */
+  tech_delivery_parts?: TechDeliveryPart[]
 }
 
 /** POST /api/v1/projects、GET /api/v1/projects/{id} 成功载荷 */
@@ -223,6 +239,13 @@ export type RequirementDocVersionCreateOrAppendBody = {
 export type RequirementDocVersionPatchBody = {
   markdown: string
 }
+
+/** REQ-M02B：`…/tech-design-doc/versions` 与需求文档版本链字段一致 */
+export type TechDesignDocVersionListItem = RequirementDocVersionListItem
+export type TechDesignDocVersionListData = RequirementDocVersionListData
+export type TechDesignDocVersionDetail = RequirementDocVersionDetail
+export type TechDesignDocVersionCreateOrAppendBody = RequirementDocVersionCreateOrAppendBody
+export type TechDesignDocVersionPatchBody = RequirementDocVersionPatchBody
 
 /** GET …/requirement-doc/modules */
 export type RequirementDocModuleSummary = {
