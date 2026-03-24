@@ -247,6 +247,29 @@ export type TechDesignDocVersionDetail = RequirementDocVersionDetail
 export type TechDesignDocVersionCreateOrAppendBody = RequirementDocVersionCreateOrAppendBody
 export type TechDesignDocVersionPatchBody = RequirementDocVersionPatchBody
 
+/** REQ-M02B：按交付部分拆分的技术设计文档模块摘要 */
+export type TechDesignDocModuleSummary = {
+  id: string
+  delivery_part_id: string
+  fixed_doc_name: string
+  title: string
+  summary: string
+  sort_order: number
+  version_count: number
+  latest_version_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type TechDesignDocModuleListData = {
+  items: TechDesignDocModuleSummary[]
+}
+
+export type TechDesignDocModuleAutoCreateResultData = {
+  items: TechDesignDocModuleSummary[]
+  created_count: number
+}
+
 /** GET …/requirement-doc/modules */
 export type RequirementDocModuleSummary = {
   id: string

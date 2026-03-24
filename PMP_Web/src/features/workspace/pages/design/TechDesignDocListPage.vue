@@ -47,9 +47,13 @@
           <template #header>
             <div class="selection-card-head">
               <span class="tdoc-section-title">技术选型</span>
-              <el-button v-if="project" size="small" type="primary" plain @click="aiTechOpen = true">
-                AI 辅助选型
-              </el-button>
+              <div class="selection-card-head-actions">
+                <el-button v-if="!selectionEditing" size="small" type="primary" @click="enterSelectionEdit">编辑</el-button>
+                <template v-else>
+                  <el-button v-if="project" size="small" type="primary" plain @click="aiTechOpen = true">AI 辅助选型</el-button>
+                  <el-button size="small" @click="cancelSelectionEdit">取消编辑</el-button>
+                </template>
+              </div>
             </div>
           </template>
           <p class="tdoc-section-desc">
@@ -57,61 +61,77 @@
             <strong>AI 辅助选型</strong>与模型讨论后生成草案，在对比弹窗确认后自动填入表单；再点击「确定保存」写入项目，作为后续技术设计文档的依据。
           </p>
 
-          <div v-for="(row, idx) in selectionParts" :key="row.id" class="selection-block">
-            <div class="selection-block-head">
-              <span class="selection-block-label">交付部分 {{ idx + 1 }}</span>
-              <el-button
-                type="danger"
-                link
-                :disabled="selectionParts.length <= 1"
-                @click="removeSelectionRow(idx)"
-              >
-                删除
-              </el-button>
-            </div>
-            <el-form label-width="96px" class="selection-form">
-              <el-form-item label="形态">
-                <el-select v-model="row.delivery_kind" placeholder="选择类型" style="width: 100%; max-width: 360px">
-                  <el-option
-                    v-for="opt in TECH_DELIVERY_KIND_OPTIONS"
-                    :key="opt.value"
-                    :label="opt.label"
-                    :value="opt.value"
+          <template v-if="selectionEditing">
+            <div v-for="(row, idx) in selectionParts" :key="row.id" class="selection-block">
+              <div class="selection-block-head">
+                <span class="selection-block-label">交付部分 {{ idx + 1 }}</span>
+                <el-button
+                  type="danger"
+                  link
+                  :disabled="selectionParts.length <= 1"
+                  @click="removeSelectionRow(idx)"
+                >
+                  删除
+                </el-button>
+              </div>
+              <el-form label-width="96px" class="selection-form">
+                <el-form-item label="形态">
+                  <el-select v-model="row.delivery_kind" placeholder="选择类型" style="width: 100%; max-width: 360px">
+                    <el-option
+                      v-for="opt in TECH_DELIVERY_KIND_OPTIONS"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item v-if="row.delivery_kind === 'other'" label="自定义名">
+                  <el-input v-model="row.custom_label" maxlength="120" show-word-limit placeholder="如：嵌入式固件、数据管道等" />
+                </el-form-item>
+                <el-form-item label="技术栈">
+                  <el-input
+                    v-model="row.technologies"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="框架、语言、运行时等（可多行）"
                   />
-                </el-select>
-              </el-form-item>
-              <el-form-item v-if="row.delivery_kind === 'other'" label="自定义名">
-                <el-input v-model="row.custom_label" maxlength="120" show-word-limit placeholder="如：嵌入式固件、数据管道等" />
-              </el-form-item>
-              <el-form-item label="技术栈">
-                <el-input
-                  v-model="row.technologies"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="框架、语言、运行时等（可多行）"
-                />
-              </el-form-item>
-              <el-form-item label="数据库">
-                <el-input v-model="row.database" type="textarea" :rows="2" placeholder="库表、缓存、对象存储等；无则写「无」或「共用」" />
-              </el-form-item>
-              <el-form-item label="架构要点">
-                <el-input
-                  v-model="row.architecture"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="分层、部署、与其它部分如何协作"
-                />
-              </el-form-item>
-              <el-form-item label="备注">
-                <el-input v-model="row.notes" type="textarea" :rows="2" placeholder="可选" />
-              </el-form-item>
-            </el-form>
-          </div>
-
-          <div class="selection-toolbar">
-            <el-button @click="addSelectionRow">添加交付部分</el-button>
-            <el-button type="primary" :loading="selectionSaving" @click="saveTechSelection">确定保存</el-button>
-          </div>
+                </el-form-item>
+                <el-form-item label="数据库">
+                  <el-input v-model="row.database" type="textarea" :rows="2" placeholder="库表、缓存、对象存储等；无则写「无」或「共用」" />
+                </el-form-item>
+                <el-form-item label="架构要点">
+                  <el-input
+                    v-model="row.architecture"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="分层、部署、与其它部分如何协作"
+                  />
+                </el-form-item>
+                <el-form-item label="备注">
+                  <el-input v-model="row.notes" type="textarea" :rows="2" placeholder="可选" />
+                </el-form-item>
+              </el-form>
+            </div>
+            <div class="selection-toolbar">
+              <el-button @click="addSelectionRow">添加交付部分</el-button>
+              <el-button type="primary" :loading="selectionSaving" @click="saveTechSelection">确定保存</el-button>
+            </div>
+          </template>
+          <template v-else>
+            <div v-if="selectionParts.length" class="selection-compact-list">
+              <div v-for="(row, idx) in selectionParts" :key="row.id" class="selection-compact-item">
+                <div class="selection-compact-head">
+                  <span class="selection-block-label">交付部分 {{ idx + 1 }}</span>
+                  <el-tag size="small" type="info">{{ displayDeliveryLabel(row) }}</el-tag>
+                </div>
+                <p class="selection-compact-line"><strong>技术栈：</strong>{{ row.technologies?.trim() || '未填写' }}</p>
+                <p class="selection-compact-line"><strong>数据库：</strong>{{ row.database?.trim() || '未填写' }}</p>
+                <p class="selection-compact-line"><strong>架构要点：</strong>{{ row.architecture?.trim() || '未填写' }}</p>
+                <p v-if="row.notes?.trim()" class="selection-compact-line"><strong>备注：</strong>{{ row.notes?.trim() }}</p>
+              </div>
+            </div>
+            <el-empty v-else description="暂无技术选型，点击「编辑」开始填写" />
+          </template>
         </el-card>
 
         <!-- 3. 技术设计文档 -->
@@ -129,94 +149,11 @@
             <div class="tdoc-card-head">
               <div class="tdoc-card-head-left">
                 <span class="tdoc-card-title">技术设计文档</span>
-                <span class="tdoc-muted">版本列表 · 编辑与 AI 辅助在详情页</span>
-              </div>
-              <div class="tdoc-card-head-actions">
-                <el-dropdown v-if="latestVersionId" trigger="click" @command="onExportLatestCommand">
-                  <el-button type="primary" plain>
-                    导出最新
-                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="md">Markdown (.md)</el-dropdown-item>
-                      <el-dropdown-item command="html">HTML (.html)</el-dropdown-item>
-                      <el-dropdown-item command="pdf">PDF（打印为 PDF）</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-                <el-button v-if="!list.items.length" type="primary" :loading="creating" @click="createVersion('empty')">
-                  创建首版文档
-                </el-button>
-                <template v-else>
-                  <el-button
-                    type="primary"
-                    plain
-                    :disabled="selectedForDiff.length !== 2"
-                    :loading="diffLoading"
-                    @click="openSelectedVersionsDiff"
-                  >
-                    对比选中版本
-                  </el-button>
-                  <el-button type="primary" :loading="creating" @click="createVersion('from_latest')">基于最新版创建</el-button>
-                  <el-button :loading="creating" @click="createVersion('empty')">新建空白版本</el-button>
-                </template>
+                <span class="tdoc-muted">按交付部分分组 · 可展开查看各自版本链</span>
               </div>
             </div>
           </template>
-
-          <template v-if="!list.items.length">
-            <el-empty description="暂无版本，请点击「创建首版文档」" />
-          </template>
-          <template v-else>
-            <p v-if="list.items.length >= 2" class="tdoc-diff-hint">
-              在表格左侧勾选<strong>两个</strong>版本，点击「对比选中版本」查看正文差异（只读，不修改任何版本）。
-            </p>
-            <el-table
-              :key="versionTableKey"
-              :data="list.items"
-              row-key="id"
-              stripe
-              size="default"
-              class="tdoc-table"
-              @selection-change="onVersionSelectionChange"
-            >
-              <el-table-column type="selection" width="48" :selectable="versionRowSelectable" />
-              <el-table-column prop="version_no" label="版本" width="88">
-                <template #default="{ row }">v{{ row.version_no }}</template>
-              </el-table-column>
-              <el-table-column prop="created_at" label="创建时间" width="200">
-                <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-              </el-table-column>
-              <el-table-column prop="preview" label="摘要" min-width="220" show-overflow-tooltip />
-              <el-table-column label="标记" width="100">
-                <template #default="{ row }">
-                  <el-tag v-if="row.id === latestVersionId" size="small" type="success">最新</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="280" fixed="right">
-                <template #default="{ row }">
-                  <div class="row-actions">
-                    <el-button type="primary" link class="row-action-btn" @click="openVersion(row.id)">打开</el-button>
-                    <el-dropdown trigger="click" @command="onRowExportCommandForRow(row.id, $event)">
-                      <el-button type="primary" link class="row-action-btn">
-                        导出
-                        <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                      </el-button>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="md">Markdown</el-dropdown-item>
-                          <el-dropdown-item command="html">HTML</el-dropdown-item>
-                          <el-dropdown-item command="pdf">PDF（打印）</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                    <el-button type="danger" link class="row-action-btn" @click="confirmDelete(row)">删除</el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </template>
+          <TechDesignModuleDocPanel :project-id="projectIdStr" :selection-ready="selectionCompleted" />
         </el-card>
       </div>
     </template>
@@ -292,6 +229,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { apiClient } from '@/api/client'
 import AiAssistDrawer from '@/components/AiAssistDrawer'
 import DiffDialog from '@/components/DiffDialog'
+import TechDesignModuleDocPanel from '@/features/workspace/pages/design/TechDesignModuleDocPanel.vue'
 import {
   buildTechSelectionDefaultPrompt,
   buildTechSelectionExternalPrompt,
@@ -324,6 +262,7 @@ const docListLoading = ref(false)
 const creating = ref(false)
 const generating = ref(false)
 const selectionSaving = ref(false)
+const selectionEditing = ref(false)
 const project = ref<ProjectOneData | null>(null)
 const list = ref<TechDesignDocVersionListData>({ items: [], latest_version_id: null })
 
@@ -358,6 +297,15 @@ const ready = computed(() => {
 })
 
 const reqDocReady = computed(() => project.value?.artifacts?.req_doc === true)
+const selectionCompleted = computed(() => {
+  const parts = selectionParts.value
+  if (!parts.length) return false
+  return parts.every((p) => {
+    if (!p.delivery_kind?.trim()) return false
+    if (p.delivery_kind === 'other' && !p.custom_label?.trim()) return false
+    return Boolean(p.technologies?.trim() && p.database?.trim() && p.architecture?.trim())
+  })
+})
 
 const latestVersionId = computed(() => list.value.latest_version_id)
 
@@ -411,6 +359,14 @@ const aiTechAnchorStorageKey = computed(() =>
   aiTechMemoryKey.value ? `pmp_ai_assist_history:${aiTechMemoryKey.value}:anchor` : '',
 )
 
+const deliveryKindLabelMap = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {}
+  TECH_DELIVERY_KIND_OPTIONS.forEach((opt) => {
+    map[opt.value] = opt.label
+  })
+  return map
+})
+
 watch(
   aiTechAnchorStorageKey,
   (k) => {
@@ -458,6 +414,20 @@ function syncSelectionFromProject() {
   }
 }
 
+function enterSelectionEdit() {
+  selectionEditing.value = true
+}
+
+function cancelSelectionEdit() {
+  syncSelectionFromProject()
+  selectionEditing.value = false
+}
+
+function displayDeliveryLabel(row: TechDeliveryPart): string {
+  if (row.delivery_kind === 'other') return row.custom_label?.trim() || '其它'
+  return deliveryKindLabelMap.value[row.delivery_kind] || row.delivery_kind || '未设置'
+}
+
 function addSelectionRow() {
   selectionParts.value.push(newSelectionRow())
 }
@@ -499,6 +469,7 @@ async function saveTechSelection() {
     const { data } = await apiClient.patch<ApiEnvelope<ProjectOneData>>(`/api/v1/projects/${pid}`, body)
     project.value = data.data ?? null
     syncSelectionFromProject()
+    selectionEditing.value = false
     ElMessage.success('技术选型已保存到项目')
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
@@ -827,6 +798,12 @@ onMounted(() => {
   width: 100%;
 }
 
+.selection-card-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .tdoc-section-desc {
   margin: 0 0 12px;
   font-size: 13px;
@@ -875,6 +852,34 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 8px;
+}
+
+.selection-compact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.selection-compact-item {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--el-fill-color-blank);
+}
+
+.selection-compact-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.selection-compact-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-primary);
 }
 
 .tdoc-card {

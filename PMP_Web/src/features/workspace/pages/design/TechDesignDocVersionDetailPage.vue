@@ -240,11 +240,13 @@ async function fetchProject() {
 async function fetchDetail() {
   const pid = route.params.projectId
   const vid = route.params.versionId
+  const mid = typeof route.params.moduleId === 'string' ? route.params.moduleId : ''
   if (typeof pid !== 'string' || typeof vid !== 'string') return
   try {
-    const { data } = await apiClient.get<ApiEnvelope<TechDesignDocVersionDetail>>(
-      `/api/v1/projects/${pid}/tech-design-doc/versions/${vid}`,
-    )
+    const url = mid
+      ? `/api/v1/projects/${pid}/tech-design-doc/modules/${mid}/versions/${vid}`
+      : `/api/v1/projects/${pid}/tech-design-doc/versions/${vid}`
+    const { data } = await apiClient.get<ApiEnvelope<TechDesignDocVersionDetail>>(url)
     const d = data.data
     detail.value = d ?? null
     markdown.value = d?.markdown ?? ''
@@ -285,14 +287,15 @@ async function onGenerate() {
 async function doSave(mode: 'new' | 'overwrite') {
   const pid = route.params.projectId
   const vid = route.params.versionId
+  const mid = typeof route.params.moduleId === 'string' ? route.params.moduleId : ''
   if (typeof pid !== 'string' || typeof vid !== 'string' || !detail.value?.is_latest) return
   saving.value = true
   try {
     if (mode === 'overwrite') {
-      const { data } = await apiClient.patch<ApiEnvelope<TechDesignDocVersionDetail>>(
-        `/api/v1/projects/${pid}/tech-design-doc/versions/${vid}`,
-        { markdown: markdown.value },
-      )
+      const url = mid
+        ? `/api/v1/projects/${pid}/tech-design-doc/modules/${mid}/versions/${vid}`
+        : `/api/v1/projects/${pid}/tech-design-doc/versions/${vid}`
+      const { data } = await apiClient.patch<ApiEnvelope<TechDesignDocVersionDetail>>(url, { markdown: markdown.value })
       const d = data.data
       if (d) {
         detail.value = d
@@ -302,10 +305,10 @@ async function doSave(mode: 'new' | 'overwrite') {
       saveDialogVisible.value = false
       await router.push({ name: 'project-m02b-design', params: { projectId: pid } })
     } else {
-      const { data } = await apiClient.post<ApiEnvelope<TechDesignDocVersionDetail>>(
-        `/api/v1/projects/${pid}/tech-design-doc/versions`,
-        { markdown: markdown.value, based_on_version_id: vid },
-      )
+      const url = mid
+        ? `/api/v1/projects/${pid}/tech-design-doc/modules/${mid}/versions`
+        : `/api/v1/projects/${pid}/tech-design-doc/versions`
+      const { data } = await apiClient.post<ApiEnvelope<TechDesignDocVersionDetail>>(url, { markdown: markdown.value, based_on_version_id: vid })
       const d = data.data
       if (d?.id) {
         ElMessage.success('已新建版本')

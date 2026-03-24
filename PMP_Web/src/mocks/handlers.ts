@@ -23,6 +23,16 @@ import {
   patchTechDesignDocVersion,
 } from '@/mocks/techDesignDocStore'
 import {
+  appendTechDesignModuleVersion,
+  createTechDesignModuleVersion,
+  createTechDesignModulesFirstAuto,
+  deleteTechDesignModuleVersion,
+  getTechDesignModuleVersion,
+  listTechDesignModuleVersions,
+  listTechDesignModules,
+  patchTechDesignModuleVersion,
+} from '@/mocks/techDesignModuleDocStore'
+import {
   aiSplitRequirementDocModules,
   appendRequirementDocModuleVersion,
   createRequirementDocModule,
@@ -264,6 +274,15 @@ let mockProjects: MockProjectRow[] = [...PROJECTS_SEED]
 function bearerOk(request: Request): boolean {
   const h = request.headers.get('authorization') ?? ''
   return h.startsWith('Bearer ')
+}
+
+function isTechSelectionCompleted(parts: TechDeliveryPart[] | undefined): boolean {
+  if (!parts || parts.length === 0) return false
+  return parts.every((p) => {
+    if (!p.delivery_kind?.trim()) return false
+    if (p.delivery_kind === 'other' && !p.custom_label?.trim()) return false
+    return Boolean(p.technologies?.trim() && p.database?.trim() && p.architecture?.trim())
+  })
 }
 
 export const handlers = [
@@ -748,6 +767,139 @@ export const handlers = [
       data: listTechDesignDocVersions(projectId),
     })
   }),
+
+  /** REQ-M02B：技术设计（按交付部分）模块列表 */
+  http.get('/api/v1/projects/:projectId/tech-design-doc/modules', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: listTechDesignModules(projectId) })
+  }),
+
+  /** REQ-M02B：首次按技术选型自动创建（事务，失败回滚） */
+  http.post('/api/v1/projects/:projectId/tech-design-doc/modules/auto-create-first', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const project = mockProjects.find((r) => r.id === projectId)
+    if (!project) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    if (!isTechSelectionCompleted(project.tech_delivery_parts)) {
+      return HttpResponse.json({ code: 40031, message: '必须先完成技术选型（形态/技术栈/数据库/架构要点）', data: null })
+    }
+    const r = createTechDesignModulesFirstAuto(projectId, project.tech_delivery_parts ?? [])
+    if (!r.ok) return HttpResponse.json({ code: 40032, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.get('/api/v1/projects/:projectId/tech-design-doc/modules/:moduleId/versions', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const r = listTechDesignModuleVersions(projectId, moduleId)
+    if (!r.ok) return HttpResponse.json({ code: 40411, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.post('/api/v1/projects/:projectId/tech-design-doc/modules/:moduleId/versions', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let body: RequirementDocVersionCreateOrAppendBody = {}
+    try {
+      body = (await request.json()) as RequirementDocVersionCreateOrAppendBody
+    } catch {
+      /* ignore */
+    }
+    if (typeof body.markdown === 'string' && typeof body.based_on_version_id === 'string') {
+      const r = appendTechDesignModuleVersion(projectId, moduleId, body.markdown, body.based_on_version_id)
+      if (!r.ok) return HttpResponse.json({ code: 40012, message: r.message, data: null })
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    }
+    if (body.mode === 'empty' || body.mode === 'from_latest') {
+      const r = createTechDesignModuleVersion(projectId, moduleId, body.mode)
+      if (!r.ok) return HttpResponse.json({ code: 40411, message: r.message, data: null })
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    }
+    return HttpResponse.json({ code: 40001, message: '请求体需包含 mode（empty|from_latest）或 markdown + based_on_version_id', data: null })
+  }),
+
+  http.get(
+    '/api/v1/projects/:projectId/tech-design-doc/modules/:moduleId/versions/:versionId',
+    ({ request, params }) => {
+      if (!bearerOk(request)) {
+        return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+      }
+      const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+      const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+      const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+      if (!mockProjects.find((r) => r.id === projectId)) {
+        return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+      }
+      const r = getTechDesignModuleVersion(projectId, moduleId, versionId)
+      if (!r.ok) return HttpResponse.json({ code: 40412, message: r.message, data: null })
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    },
+  ),
+
+  http.patch(
+    '/api/v1/projects/:projectId/tech-design-doc/modules/:moduleId/versions/:versionId',
+    async ({ request, params }) => {
+      if (!bearerOk(request)) {
+        return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+      }
+      const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+      const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+      const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+      if (!mockProjects.find((r) => r.id === projectId)) {
+        return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+      }
+      let markdown = ''
+      try {
+        const b = (await request.json()) as { markdown?: string }
+        markdown = typeof b.markdown === 'string' ? b.markdown : ''
+      } catch {
+        /* ignore */
+      }
+      const r = patchTechDesignModuleVersion(projectId, moduleId, versionId, markdown)
+      if (!r.ok) return HttpResponse.json({ code: 40013, message: r.message, data: null })
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    },
+  ),
+
+  http.delete(
+    '/api/v1/projects/:projectId/tech-design-doc/modules/:moduleId/versions/:versionId',
+    ({ request, params }) => {
+      if (!bearerOk(request)) {
+        return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+      }
+      const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+      const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+      const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+      if (!mockProjects.find((r) => r.id === projectId)) {
+        return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+      }
+      const r = deleteTechDesignModuleVersion(projectId, moduleId, versionId)
+      if (!r.ok) return HttpResponse.json({ code: 40412, message: r.message, data: null })
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    },
+  ),
 
   /** 模块细化：列表 */
   http.get('/api/v1/projects/:projectId/requirement-doc/modules', ({ request, params }) => {

@@ -569,6 +569,204 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
+  /api/v1/projects/{projectId}/tech-design-doc/modules:
+    get:
+      tags: [tech-design-doc]
+      summary: 技术设计文档（按交付部分）模块列表
+      operationId: listTechDesignDocModules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTechDesignDocModuleList"
+  /api/v1/projects/{projectId}/tech-design-doc/modules/auto-create-first:
+    post:
+      tags: [tech-design-doc]
+      summary: 首次按技术选型自动创建交付部分技术文档（事务）
+      description: |
+        前置条件：技术选型必须完整（每个交付部分需有 形态/技术栈/数据库/架构要点），且存在最新需求文档。
+        处理规则：按交付部分批量创建各自 v1；任一部分失败则整体回滚。
+      operationId: postTechDesignDocModulesAutoCreateFirst
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTechDesignDocModuleAutoCreateResult"
+        "400":
+          description: 技术选型未完成或创建失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+  /api/v1/projects/{projectId}/tech-design-doc/modules/{moduleId}/versions:
+    get:
+      tags: [tech-design-doc]
+      summary: 指定交付部分技术文档版本列表
+      operationId: listTechDesignDocModuleVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+    post:
+      tags: [tech-design-doc]
+      summary: 指定交付部分技术文档创建版本或保存为新版本
+      operationId: postTechDesignDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionCreateOrAppend"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+  /api/v1/projects/{projectId}/tech-design-doc/modules/{moduleId}/versions/{versionId}:
+    get:
+      tags: [tech-design-doc]
+      summary: 指定交付部分技术文档版本详情
+      operationId: getTechDesignDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+    patch:
+      tags: [tech-design-doc]
+      summary: 覆盖指定交付部分当前最新版本正文
+      operationId: patchTechDesignDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+    delete:
+      tags: [tech-design-doc]
+      summary: 删除指定交付部分技术文档版本
+      operationId: deleteTechDesignDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
     patch:
       tags: [tech-design-doc]
       summary: 覆盖技术设计当前最新版本正文
@@ -1935,6 +2133,73 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/RequirementDocModuleAiSplitResultData"
+
+    TechDesignDocModuleSummary:
+      type: object
+      required:
+        [id, delivery_part_id, fixed_doc_name, title, summary, sort_order, version_count, latest_version_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        delivery_part_id:
+          type: string
+        fixed_doc_name:
+          type: string
+          description: 固定命名规则（不可修改）
+        title:
+          type: string
+        summary:
+          type: string
+        sort_order:
+          type: integer
+        version_count:
+          type: integer
+        latest_version_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TechDesignDocModuleListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TechDesignDocModuleSummary"
+
+    TechDesignDocModuleAutoCreateResultData:
+      type: object
+      required: [items, created_count]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TechDesignDocModuleSummary"
+        created_count:
+          type: integer
+          minimum: 0
+
+    EnvelopeTechDesignDocModuleList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/TechDesignDocModuleListData"
+
+    EnvelopeTechDesignDocModuleAutoCreateResult:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/TechDesignDocModuleAutoCreateResultData"
 
     AiProvider:
       type: string

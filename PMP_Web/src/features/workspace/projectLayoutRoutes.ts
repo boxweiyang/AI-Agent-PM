@@ -51,6 +51,12 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     meta: { title: '需求与文档', artifactKey: 'req_doc', reqRef: 'REQ-M02' },
   },
   {
+    path: 'm02b/design/modules/:moduleId/versions/:versionId',
+    name: 'project-m02b-design-module-version',
+    component: () => import('./pages/design/TechDesignDocVersionDetailPage.vue'),
+    meta: { title: '技术设计文档', artifactKey: 'tech_design', reqRef: 'REQ-M02B' },
+  },
+  {
     path: 'm02b/design/versions/:versionId',
     name: 'project-m02b-design-version',
     component: () => import('./pages/design/TechDesignDocVersionDetailPage.vue'),
