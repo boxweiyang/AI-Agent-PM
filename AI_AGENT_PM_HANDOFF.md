@@ -106,10 +106,11 @@
 
 > **原则**：不接真后端也能在浏览器里 **完整点通产品路径**；缺接口就 **YAML + MSW** 先定形状。
 
-1. **TECH-001～005：开始完成技术设计页面**：把 `PMP_Req_V2/00-技术规划` 里各 TECH 文档的结构/目录做成页面（先实现导航、展示与导出壳，再补交互）。  
-2. **按 REQ 铺开 M03～M11**：对照 **`PMP_Req_V2`** 各分册，将侧栏各入口从占位升级为 **有结构的页面**（可先简后繁）；每模块需要的数据在 **handlers** 里用内存 store 或 **fixture** 模拟。  
-   - 优先接 **M04 Task 页面**：消费 `api_endpoint_id` 查询参数（来自 M02C），并完成“任务关联接口”的高亮/筛选；复用 Mock 接口 `GET /api/v1/projects/{projectId}/api-catalog/tasks/{taskId}/endpoints`。  
-   - 完成 **Task ↔ 接口状态回写**：把 Task 完成态映射回 M02C 三条并行状态（前端/后端/测试）。  
+1. **优先完成 M04 Task 页面（首版可用）**：将 `project-m04-tasks` 从占位升级为真实页面，先打通与 M02C 的双向交互。  
+   - 消费 `api_endpoint_id` 查询参数（来自 M02C），实现任务列表高亮/筛选与回跳定位。  
+   - 接入已存在 Mock 契约：`GET /api/v1/projects/{projectId}/api-catalog/tasks`、`GET /api/v1/projects/{projectId}/api-catalog/tasks/{taskId}/endpoints`、`PUT /api/v1/projects/{projectId}/api-catalog/endpoints/{endpointId}/task-bindings`。  
+   - 完成 **Task ↔ 接口状态回写**：把 Task 完成态映射到接口三条并行状态（前端/后端/测试），并确保 M02C 页面刷新后可见。  
+2. **完成后从数据库结构页开始向下推进（M03 起）**：按 `PMP_Req_V2` 逐模块把占位页替换为可交互页面；新增行为继续保持「先 YAML、再 handlers、再页面」。
 3. ~~**`ProjectDashboard`（M08）**~~：**已完成（Mock）** — `GET …/dashboard` + 页面；后续与真服务对齐即可。  
 4. **设置三页**：AI / 个人 / 系统在 Mock 下 **可保存、可刷新仍生效**（推荐 **localStorage** 或 MSW **sessionStorage 式**内存，与后续真 API 字段对齐时再切换数据源）。  
 5. **契约同步**：每增加 Mock 行为，更新 **`openapi.yaml`**（含 request/response schema），避免与真后端对接时再大改。  
@@ -153,6 +154,8 @@
 | 2026-03-22 | **顶栏**：`AppHeaderBar` 面包屑全路径 + 返回箭头；`headerBreadcrumbs.ts`；§4.2 更新。 |
 | 2026-03-22 | **REQ-M02**：需求文档 AI 辅助 diff MVP + 对话长期记忆（project+version）与接受/回退后上下文截断。 |
 | 2026-03-24 | **REQ-M02C**：接口管理页（Mock）上线；已预留与 M04 的 `api_endpoint_id` 跨模块联动与 Task-接口反查接口，后续开发 M04 时务必先接入。 |
+| 2026-03-24 | **M02C 交互增强**：接口明细支持详细说明；操作栏改为三点下拉；通用接口约束升级为版本化文档流（列表/对比/打开详情），详情页采用 Markdown 编辑 + AI 辅助；且“AI 生成接口清单”仅在约束版本为 0 时自动生成首版约束。 |
+| 2026-03-24 | **下一步优先级更新**：明日先完成 M04 Task 页面并与接口管理真实打通，再从数据库结构页（M03）开始向下做。 |
 
 ---
 
