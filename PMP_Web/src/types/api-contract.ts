@@ -223,3 +223,45 @@ export type RequirementDocVersionCreateOrAppendBody = {
 export type RequirementDocVersionPatchBody = {
   markdown: string
 }
+
+/** GET …/requirement-doc/modules */
+export type RequirementDocModuleSummary = {
+  id: string
+  title: string
+  summary: string
+  sort_order: number
+  version_count: number
+  latest_version_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type RequirementDocModuleListData = {
+  items: RequirementDocModuleSummary[]
+}
+
+export type RequirementDocModuleCreateBody = {
+  title: string
+  summary?: string
+}
+
+export type RequirementDocModulePatchBody = {
+  title?: string
+  summary?: string
+}
+
+export type RequirementDocModuleReorderBody = {
+  ordered_module_ids: string[]
+}
+
+export type RequirementDocModuleAiSplitRequest = {
+  mode: 'full_replace' | 'incremental'
+}
+
+export type RequirementDocModuleAiSplitResultData = RequirementDocModuleListData & {
+  mode: 'full_replace' | 'incremental'
+  /** 本次新落库的模块标题（全量时为全部新建；增量时为真正新增的） */
+  added_titles: string[]
+  /** 增量模式下因「同名模块已存在」而跳过的 AI 建议标题 */
+  skipped_titles: string[]
+}

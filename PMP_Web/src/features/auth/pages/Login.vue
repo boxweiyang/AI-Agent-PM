@@ -66,7 +66,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 
 import { LOGIN_REMEMBER_7D_KEY } from '@/api/auth-storage'
-import ThemeSegmented from '@/components/ThemeSegmented.vue'
+import ThemeSegmented from '@/components/ThemeSegmented'
 import { PRODUCT_DISPLAY_NAME } from '@/config/productBranding'
 import { useAuthStore } from '@/stores/auth'
 

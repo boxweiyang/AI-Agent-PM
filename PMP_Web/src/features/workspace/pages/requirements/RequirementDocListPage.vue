@@ -5,12 +5,18 @@
   <div class="req-doc-list" v-loading="loading">
     <el-card shadow="never" class="req-card">
       <template #header>
-        <div class="req-card-head">
-          <div class="req-card-head-left">
+        <div class="req-card-head req-card-head--stacked">
+          <div class="req-tabs-wrap">
+            <el-tabs v-model="listTab" class="req-main-tabs" type="card" @tab-change="onListTabChange">
+              <el-tab-pane label="需求文档" name="overview" />
+              <el-tab-pane label="模块细化文档" name="modules" />
+            </el-tabs>
+          </div>
+          <div class="req-card-head-meta">
             <span class="req-title">需求与文档</span>
             <el-tag v-if="reqRef" size="small" type="info">{{ reqRef }}</el-tag>
           </div>
-          <div class="req-card-head-actions">
+          <div v-if="listTab === 'overview'" class="req-card-head-actions">
             <el-dropdown v-if="latestVersionId" trigger="click" @command="onExportLatestCommand">
               <el-button type="primary" plain>
                 导出最新
@@ -28,6 +34,15 @@
               创建首版文档
             </el-button>
             <template v-else-if="ready && list.items.length">
+              <el-button
+                type="primary"
+                plain
+                :disabled="selectedForDiff.length !== 2"
+                :loading="diffLoading"
+                @click="openSelectedVersionsDiff"
+              >
+                对比选中版本
+              </el-button>
               <el-button type="primary" :loading="creating" @click="createVersion('from_latest')">基于最新版创建</el-button>
               <el-button :loading="creating" @click="createVersion('empty')">新建空白版本</el-button>
             </template>
@@ -49,11 +64,26 @@
           </template>
         </el-result>
       </template>
+      <template v-else-if="listTab === 'modules'">
+        <RequirementModuleDocPanel v-if="projectIdStr" :project-id="projectIdStr" />
+      </template>
       <template v-else-if="!list.items.length">
         <el-empty description="暂无版本，请点击「创建首版文档」" />
       </template>
       <template v-else>
-        <el-table :data="list.items" stripe size="default" class="req-table">
+        <p v-if="list.items.length >= 2" class="req-diff-hint">
+          在表格左侧勾选<strong>两个</strong>版本，点击「对比选中版本」查看正文差异（只读，不修改任何版本）。
+        </p>
+        <el-table
+          :key="versionTableKey"
+          :data="list.items"
+          row-key="id"
+          stripe
+          size="default"
+          class="req-table"
+          @selection-change="onVersionSelectionChange"
+        >
+          <el-table-column type="selection" width="48" :selectable="versionRowSelectable" />
           <el-table-column prop="version_no" label="版本" width="88">
             <template #default="{ row }">v{{ row.version_no }}</template>
           </el-table-column>
@@ -90,6 +120,16 @@
         </el-table>
       </template>
     </el-card>
+
+    <DiffDialog
+      v-model="diffVisible"
+      title="版本差异"
+      read-only
+      :old-text="diffOldText"
+      :new-text="diffNewText"
+      :left-header="diffLeftHeader"
+      :right-header="diffRightHeader"
+    />
   </div>
 </template>
 
@@ -100,12 +140,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { apiClient } from '@/api/client'
+import DiffDialog from '@/components/DiffDialog'
+import RequirementModuleDocPanel from '@/features/workspace/pages/requirements/RequirementModuleDocPanel.vue'
 import type {
   ApiEnvelope,
   ProjectOneData,
   ProjectPatchRequestBody,
   RequirementDocVersionDetail,
   RequirementDocVersionListData,
+  RequirementDocVersionListItem,
 } from '@/types/api-contract'
 import {
   exportRequirementHtml,
@@ -116,11 +159,39 @@ import {
 const route = useRoute()
 const router = useRouter()
 
+const listTab = ref<'overview' | 'modules'>('overview')
+
+const projectIdStr = computed(() =>
+  typeof route.params.projectId === 'string' ? route.params.projectId : '',
+)
+
+function syncListTabFromRoute() {
+  listTab.value = route.query.tab === 'modules' ? 'modules' : 'overview'
+}
+
+function onListTabChange(name: string | number) {
+  const tab = name === 'modules' ? 'modules' : 'overview'
+  const id = projectIdStr.value
+  if (!id) return
+  const q = { ...route.query } as Record<string, string | string[] | undefined>
+  if (tab === 'modules') q.tab = 'modules'
+  else delete q.tab
+  void router.replace({ name: route.name ?? undefined, params: { projectId: id }, query: q })
+}
+
 const loading = ref(true)
 const creating = ref(false)
 const generating = ref(false)
 const project = ref<ProjectOneData | null>(null)
 const list = ref<RequirementDocVersionListData>({ items: [], latest_version_id: null })
+
+const selectedForDiff = ref<RequirementDocVersionListItem[]>([])
+const diffVisible = ref(false)
+const diffLoading = ref(false)
+const diffOldText = ref('')
+const diffNewText = ref('')
+const diffLeftHeader = ref('')
+const diffRightHeader = ref('')
 
 const reqRef = computed(() => (route.meta.reqRef as string) ?? '')
 const artifactKey = computed(() => (route.meta.artifactKey as string) ?? '')
@@ -133,6 +204,9 @@ const ready = computed(() => {
 
 const latestVersionId = computed(() => list.value.latest_version_id)
 
+/** 列表变更后重挂表格，避免勾选状态与已删版本错位 */
+const versionTableKey = computed(() => list.value.items.map((i) => i.id).join('|'))
+
 const subTitlePending = computed(
   () => `按 ${reqRef.value} 落地后可管理需求文档版本。演示环境可先「生成」解锁入口。`,
 )
@@ -142,6 +216,39 @@ function formatTime(iso: string) {
     return new Date(iso).toLocaleString()
   } catch {
     return iso
+  }
+}
+
+function versionRowSelectable(row: RequirementDocVersionListItem) {
+  return (
+    selectedForDiff.value.length < 2 || selectedForDiff.value.some((r) => r.id === row.id)
+  )
+}
+
+function onVersionSelectionChange(rows: RequirementDocVersionListItem[]) {
+  selectedForDiff.value = rows
+}
+
+async function openSelectedVersionsDiff() {
+  if (selectedForDiff.value.length !== 2) return
+  const [older, newer] = [...selectedForDiff.value].sort((a, b) => a.version_no - b.version_no)
+  diffLoading.value = true
+  try {
+    const [leftMd, rightMd] = await Promise.all([
+      fetchVersionMarkdown(older.id),
+      fetchVersionMarkdown(newer.id),
+    ])
+    if (leftMd == null || rightMd == null) {
+      ElMessage.error('无法读取选中版本的正文')
+      return
+    }
+    diffOldText.value = leftMd
+    diffNewText.value = rightMd
+    diffLeftHeader.value = `v${older.version_no} · ${formatTime(older.created_at)}`
+    diffRightHeader.value = `v${newer.version_no} · ${formatTime(newer.created_at)}`
+    diffVisible.value = true
+  } finally {
+    diffLoading.value = false
   }
 }
 
@@ -313,6 +420,16 @@ watch(
   },
 )
 
+watch(
+  () => route.query.tab,
+  () => syncListTabFromRoute(),
+  { immediate: true },
+)
+
+watch(versionTableKey, () => {
+  selectedForDiff.value = []
+})
+
 onMounted(() => {
   void loadAll()
 })
@@ -334,6 +451,26 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.req-card-head--stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.req-tabs-wrap {
+  width: 100%;
+}
+
+.req-main-tabs :deep(.el-tabs__header) {
+  margin: 0 0 8px;
+}
+
+.req-card-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .req-card-head-left {
@@ -368,5 +505,12 @@ onMounted(() => {
   margin: 0;
   padding-top: 0;
   padding-bottom: 0;
+}
+
+.req-diff-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
 }
 </style>

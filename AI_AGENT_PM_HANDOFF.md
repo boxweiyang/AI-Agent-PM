@@ -125,7 +125,7 @@
 | `PMP_Web/src/features/workspace/projectLayoutRoutes.ts` | 项目子路由 |
 | `PMP_Web/src/layouts/WorkbenchLayout.vue` | 无侧栏壳 |
 | `PMP_Web/src/layouts/ProjectLayout.vue` | 三态侧栏 + 腰钮 |
-| `PMP_Web/src/components/AppHeaderBar.vue` | 顶栏 |
+| `PMP_Web/src/components/AppHeaderBar/` | 顶栏（见目录内 README；组件均为 **`组件名/` + index.ts**） |
 | `PMP_Web/docs/FEATURES.md` | **用户可见功能真相来源** |
 | `PMP_Web/docs/STRUCTURE.md` | 目录与约定 |
 

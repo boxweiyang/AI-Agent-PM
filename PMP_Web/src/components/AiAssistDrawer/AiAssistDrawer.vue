@@ -1,4 +1,16 @@
 <template>
+  <!-- 组合：抽屉 + 公用 DiffDialog（见 @/components/DiffDialog） -->
+  <DiffDialog
+    v-model="proposeDiffOpen"
+    :old-text="proposeOldText"
+    :new-text="proposeNewText"
+    left-header="原版（当前正文）"
+    right-header="新版（AI 建议）"
+    :allow-accept="allowApply"
+    :deny-accept-message="allowApplyMessage"
+    @accept="onProposeDiffAccept"
+    @rollback="onProposeDiffRollback"
+  />
   <el-drawer
     :model-value="modelValue"
     size="460px"
@@ -89,8 +101,9 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
+import DiffDialog from '@/components/DiffDialog'
 import { apiClient } from '@/api/client'
 import type { ApiEnvelope } from '@/types/api-contract'
 
@@ -104,6 +117,18 @@ const props = withDefaults(
     externalPrompt?: string
     payloadBase?: Record<string, unknown>
     memoryKey?: string
+    /**
+     * 与编辑区同步的当前正文，用于「已有文档 → 生成建议稿」时 diff 左侧。
+     * 不传则回退用 payloadBase.markdown（可能与 UI 不同步，建议业务页显式传入）。
+     */
+    documentText?: string | null
+    /**
+     * 上次「接受」生成结果时的 assistant 消息 id，用于 diff「回退」时截断对话上下文（与业务页 localStorage 锚点一致）。
+     */
+    anchorAssistantId?: string | null
+    /** 为 false 时 diff 弹窗内「接受」将被拦截（如历史版本只读） */
+    allowApply?: boolean
+    allowApplyMessage?: string
   }>(),
   {
     title: 'AI 辅助',
@@ -112,13 +137,16 @@ const props = withDefaults(
     externalPrompt: '',
     payloadBase: () => ({}),
     memoryKey: '',
+    documentText: undefined,
+    anchorAssistantId: null,
+    allowApply: true,
+    allowApplyMessage: '历史版本不允许写入，请打开最新版本',
   },
 )
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'apply', payload: { assistantId: string; text: string }): void
-  (e: 'propose', payload: { assistantId: string; markdown: string }): void
   (e: 'generated', text: string): void
 }>()
 
@@ -140,6 +168,18 @@ const historyEl = ref<HTMLElement | null>(null)
 const sending = ref(false)
 const generatingDoc = ref(false)
 const assistantStreamTimer = ref<number | null>(null)
+
+/** 内置差异弹窗（与 generate_doc 的 propose 流程绑定） */
+const proposeDiffOpen = ref(false)
+const proposeOldText = ref('')
+const proposeNewText = ref('')
+const proposeAssistantId = ref<string | null>(null)
+
+const effectiveDocumentBaseline = computed(() => {
+  if (props.documentText !== undefined && props.documentText !== null) return props.documentText
+  const m = props.payloadBase?.markdown
+  return typeof m === 'string' ? m : ''
+})
 
 const MEMORY_PREFIX = 'pmp_ai_assist_history:'
 
@@ -344,8 +384,8 @@ async function generateDoc() {
 
   if (messages.value.some((m) => m.role === 'assistant' && m.streaming)) return
 
-  const maybeMd = props.payloadBase?.markdown
-  const hasExistingDoc = typeof maybeMd === 'string' && maybeMd.trim().length > 0
+  const baseline = effectiveDocumentBaseline.value
+  const hasExistingDoc = baseline.trim().length > 0
 
   generatingDoc.value = true
   try {
@@ -364,8 +404,10 @@ async function generateDoc() {
     }
 
     if (hasExistingDoc) {
-      // 已有正文：先把修改建议返回给父组件做 diff，再由父组件决定接受/回退
-      emit('propose', { assistantId, markdown: md })
+      proposeOldText.value = baseline
+      proposeNewText.value = md
+      proposeAssistantId.value = assistantId
+      proposeDiffOpen.value = true
     } else {
       // 无正文：沿用现有交互，直接应用到编辑框（并关闭抽屉）
       emit('apply', { assistantId, text: md })
@@ -400,6 +442,21 @@ function truncateHistoryToAssistantId(assistantId: string | null) {
 
   messages.value = messages.value.slice(0, idx + 1)
   persistHistoryToMemory()
+}
+
+function onProposeDiffAccept() {
+  const aid = proposeAssistantId.value
+  if (!aid) return
+  truncateHistoryToAssistantId(aid)
+  emit('apply', { assistantId: aid, text: proposeNewText.value })
+  ElMessage.success('已接受修改并应用到正文')
+  emit('update:modelValue', false)
+  proposeAssistantId.value = null
+}
+
+function onProposeDiffRollback() {
+  truncateHistoryToAssistantId(props.anchorAssistantId ?? null)
+  proposeAssistantId.value = null
 }
 
 defineExpose({

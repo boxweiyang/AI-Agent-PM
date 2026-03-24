@@ -1,5 +1,5 @@
 <!--
-  REQ-M02：单版本 Markdown 编辑/预览；仅最新可保存；保存时弹窗选新建版本或覆盖。
+  REQ-M02：模块细化文档 — 单版本 Markdown 编辑/预览；契约同总需求文档版本链。
 -->
 <template>
   <div class="req-doc-detail" v-loading="loading">
@@ -12,7 +12,7 @@
         <el-result icon="folder-opened" title="尚未生成该模块内容" :sub-title="subTitlePending">
           <template #extra>
             <el-button type="primary" :loading="generating" @click="onGenerate">一键生成（演示）</el-button>
-            <el-button @click="goList">返回需求文档列表</el-button>
+            <el-button @click="goList">返回列表</el-button>
           </template>
         </el-result>
       </el-card>
@@ -29,7 +29,7 @@
         <div class="detail-head">
           <div class="detail-head-left">
             <el-button text @click="goList">返回列表</el-button>
-            <span class="detail-title">需求文档 v{{ detail.version_no }}</span>
+            <span class="detail-title">{{ moduleTitle }} · v{{ detail.version_no }}</span>
             <el-tag v-if="detail.is_latest" size="small" type="success">最新</el-tag>
             <el-tag v-else size="small" type="info">历史</el-tag>
           </div>
@@ -66,7 +66,7 @@
           show-icon
           :closable="false"
           class="detail-alert"
-          title="当前为历史版本，仅可查看与导出。请在列表打开「最新」版本进行编辑与保存。"
+          title="当前为历史版本，仅可查看与导出。请在列表展开该模块后打开「最新」版本进行编辑与保存。"
         />
 
         <div v-show="viewMode === 'edit'" class="editor-pane">
@@ -97,8 +97,8 @@
 
     <AiAssistDrawer
       v-model="aiVisible"
-      title="AI 辅助（需求文档）"
-      capability="requirement_doc_assist"
+      title="AI 辅助（模块细化）"
+      capability="requirement_module_doc_assist"
       :default-prompt="defaultAiPrompt"
       :external-prompt="externalAiPrompt"
       :payload-base="aiPayloadBase"
@@ -124,6 +124,7 @@ import type {
   ApiEnvelope,
   ProjectOneData,
   ProjectPatchRequestBody,
+  RequirementDocModuleListData,
   RequirementDocVersionDetail,
 } from '@/types/api-contract'
 import {
@@ -148,8 +149,8 @@ const aiVisible = ref(false)
 const typingTimer = ref<number | null>(null)
 
 const lastAppliedAssistantId = ref<string | null>(null)
+const moduleTitle = ref('模块细化')
 
-/** AI 辅助内置 diff「接受」是否允许写入（仅最新版） */
 const allowAiDocumentApply = computed(() => detail.value?.is_latest === true)
 
 const artifactKey = computed(() => (route.meta.artifactKey as string) ?? '')
@@ -162,32 +163,40 @@ const ready = computed(() => {
 })
 
 const subTitlePending = computed(
-  () => `按 ${reqRef.value} 落地后可编辑需求文档。演示环境可先「生成」解锁入口。`,
+  () => `按 ${reqRef.value} 落地后可编辑模块细化文档。演示环境可先「生成」解锁入口。`,
 )
 
 const renderedHtml = computed(() => markdownToHtmlFragment(markdown.value || ''))
+
+const versionLabelForAi = computed(() => {
+  const m = moduleTitle.value
+  const v = detail.value ? `v${detail.value.version_no}` : ''
+  return m && v ? `${m} · ${v}` : v || m || '（未命名）'
+})
+
 const defaultAiPrompt = computed(() => {
-  const title = detail.value ? `v${detail.value.version_no}` : ''
   const excerpt = markdown.value.trim().slice(0, 220)
   return buildRequirementDocDefaultPrompt({
-    versionLabel: title || '（未命名版本）',
+    versionLabel: versionLabelForAi.value,
     markdownExcerpt: excerpt || '（正文为空）',
   })
 })
 
 const externalAiPrompt = computed(() => {
-  const title = detail.value ? `v${detail.value.version_no}` : ''
   const excerpt = markdown.value.trim().slice(0, 220)
   return buildRequirementDocExternalPrompt({
-    versionLabel: title || '（未命名版本）',
+    versionLabel: versionLabelForAi.value,
     markdownExcerpt: excerpt || '（正文为空）',
   })
 })
 
 const aiPayloadBase = computed<Record<string, unknown>>(() => {
   const pid = typeof route.params.projectId === 'string' ? route.params.projectId : ''
+  const mid = typeof route.params.moduleId === 'string' ? route.params.moduleId : ''
   return {
     project_id: pid,
+    module_id: mid,
+    module_title: moduleTitle.value,
     version_id: detail.value?.id ?? '',
     version_no: detail.value?.version_no ?? 0,
     markdown: markdown.value,
@@ -196,9 +205,10 @@ const aiPayloadBase = computed<Record<string, unknown>>(() => {
 
 const aiMemoryKey = computed(() => {
   const pid = typeof route.params.projectId === 'string' ? route.params.projectId : ''
+  const mid = typeof route.params.moduleId === 'string' ? route.params.moduleId : ''
   const vid = detail.value?.id ?? ''
-  if (!pid || !vid) return ''
-  return `${pid}:${vid}:requirement_doc_assist`
+  if (!pid || !mid || !vid) return ''
+  return `${pid}:${mid}:${vid}:requirement_module_doc_assist`
 })
 
 const aiAnchorStorageKey = computed(() => (aiMemoryKey.value ? `pmp_ai_assist_history:${aiMemoryKey.value}:anchor` : ''))
@@ -220,7 +230,13 @@ watch(
 
 function goList() {
   const id = route.params.projectId
-  if (typeof id === 'string') void router.push({ name: 'project-m02-requirements', params: { projectId: id } })
+  if (typeof id === 'string') {
+    void router.push({
+      name: 'project-m02-requirements',
+      params: { projectId: id },
+      query: { tab: 'modules' },
+    })
+  }
 }
 
 async function fetchProject() {
@@ -235,13 +251,31 @@ async function fetchProject() {
   }
 }
 
+async function fetchModuleMeta() {
+  const pid = route.params.projectId
+  const mid = route.params.moduleId
+  if (typeof pid !== 'string' || typeof mid !== 'string') return
+  try {
+    const { data } = await apiClient.get<ApiEnvelope<RequirementDocModuleListData>>(
+      `/api/v1/projects/${pid}/requirement-doc/modules`,
+    )
+    const m = data.data?.items?.find((x) => x.id === mid)
+    if (m) {
+      moduleTitle.value = m.title
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 async function fetchDetail() {
   const pid = route.params.projectId
+  const mid = route.params.moduleId
   const vid = route.params.versionId
-  if (typeof pid !== 'string' || typeof vid !== 'string') return
+  if (typeof pid !== 'string' || typeof mid !== 'string' || typeof vid !== 'string') return
   try {
     const { data } = await apiClient.get<ApiEnvelope<RequirementDocVersionDetail>>(
-      `/api/v1/projects/${pid}/requirement-doc/versions/${vid}`,
+      `/api/v1/projects/${pid}/requirement-doc/modules/${mid}/versions/${vid}`,
     )
     const d = data.data
     detail.value = d ?? null
@@ -256,7 +290,10 @@ async function load() {
   loading.value = true
   try {
     await fetchProject()
-    if (ready.value) await fetchDetail()
+    if (ready.value) {
+      await fetchModuleMeta()
+      await fetchDetail()
+    }
   } finally {
     loading.value = false
   }
@@ -280,15 +317,24 @@ async function onGenerate() {
   }
 }
 
+function versionsBasePath() {
+  const pid = route.params.projectId
+  const mid = route.params.moduleId
+  if (typeof pid !== 'string' || typeof mid !== 'string') return ''
+  return `/api/v1/projects/${pid}/requirement-doc/modules/${mid}/versions`
+}
+
 async function doSave(mode: 'new' | 'overwrite') {
   const pid = route.params.projectId
   const vid = route.params.versionId
   if (typeof pid !== 'string' || typeof vid !== 'string' || !detail.value?.is_latest) return
+  const base = versionsBasePath()
+  if (!base) return
   saving.value = true
   try {
     if (mode === 'overwrite') {
       const { data } = await apiClient.patch<ApiEnvelope<RequirementDocVersionDetail>>(
-        `/api/v1/projects/${pid}/requirement-doc/versions/${vid}`,
+        `${base}/${vid}`,
         { markdown: markdown.value },
       )
       const d = data.data
@@ -298,17 +344,17 @@ async function doSave(mode: 'new' | 'overwrite') {
       }
       ElMessage.success('已覆盖当前版本')
       saveDialogVisible.value = false
-      await router.push({ name: 'project-m02-requirements', params: { projectId: pid } })
+      await router.push({ name: 'project-m02-requirements', params: { projectId: pid }, query: { tab: 'modules' } })
     } else {
-      const { data } = await apiClient.post<ApiEnvelope<RequirementDocVersionDetail>>(
-        `/api/v1/projects/${pid}/requirement-doc/versions`,
-        { markdown: markdown.value, based_on_version_id: vid },
-      )
+      const { data } = await apiClient.post<ApiEnvelope<RequirementDocVersionDetail>>(base, {
+        markdown: markdown.value,
+        based_on_version_id: vid,
+      })
       const d = data.data
       if (d?.id) {
         ElMessage.success('已新建版本')
         saveDialogVisible.value = false
-        await router.push({ name: 'project-m02-requirements', params: { projectId: pid } })
+        await router.push({ name: 'project-m02-requirements', params: { projectId: pid }, query: { tab: 'modules' } })
       }
     }
   } catch (e: unknown) {
@@ -318,11 +364,21 @@ async function doSave(mode: 'new' | 'overwrite') {
   }
 }
 
+function exportFileSlug(title: string, fallback: string) {
+  const s = title
+    .trim()
+    .replace(/[/\\?%*:|"<>]/g, '_')
+    .replace(/\s+/g, '-')
+    .slice(0, 48)
+  return s || fallback.replace(/^rdm-/, '').slice(0, 12)
+}
+
 function exportCurrent(kind: 'md' | 'html' | 'pdf') {
   const d = detail.value
   if (!d) return
-  const base = `需求文档-v${d.version_no}`
-  const title = `需求文档 v${d.version_no}`
+  const mid = typeof route.params.moduleId === 'string' ? route.params.moduleId : 'module'
+  const base = `模块细化-${exportFileSlug(moduleTitle.value, mid)}-v${d.version_no}`
+  const title = `${moduleTitle.value} v${d.version_no}`
   const md = markdown.value
   if (kind === 'md') exportRequirementMarkdown(base, md)
   else if (kind === 'html') exportRequirementHtml(base, title, md)
@@ -384,7 +440,7 @@ function handleAiApplyWithMeta(payload: { assistantId: string; text: string }) {
 }
 
 watch(
-  () => [route.params.projectId, route.params.versionId],
+  () => [route.params.projectId, route.params.moduleId, route.params.versionId],
   () => {
     void load()
   },
@@ -527,5 +583,4 @@ onUnmounted(() => {
   color: var(--el-text-color-regular);
   line-height: 1.6;
 }
-
 </style>

@@ -356,7 +356,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
-import TechStackMultiSelect from '@/components/TechStackMultiSelect.vue'
+import TechStackMultiSelect from '@/components/TechStackMultiSelect'
 import { apiClient } from '@/api/client'
 import { setLastProjectId } from '@/api/last-project'
 import { PROJECT_RELATED_MODULES } from '@/config/projectRelatedModules'

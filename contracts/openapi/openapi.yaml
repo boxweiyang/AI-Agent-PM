@@ -5,7 +5,7 @@ info:
     前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
 
     **鉴权（V1）**：账号密码登录；Access JWT（Bearer）；Refresh 见 TECH-004（实现可选 Cookie HttpOnly；契约中 Body 字段保留作备选）。
-  version: 0.2.9-draft
+  version: 0.3.0-draft
 
 servers:
   - url: http://127.0.0.1:8000
@@ -21,7 +21,8 @@ tags:
   - name: ai
     description: AI 网关（经 ai_gateway；Agent 能力键 capability）
   - name: requirement-doc
-    description: REQ-M02 需求文档 Markdown 版本列表与编辑
+    description: |
+      REQ-M02 需求文档：总文档 Markdown 版本链；**模块细化文档**（按模块拆分、每模块独立版本链、AI 模块化拆分）。
 
 paths:
   /api/v1/health:
@@ -460,6 +461,477 @@ paths:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
 
+  /api/v1/projects/{projectId}/requirement-doc/modules:
+    get:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 模块列表
+      description: 按 `sort_order` 升序返回；不含正文，仅元数据与版本统计。
+      operationId: listRequirementDocModules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocModuleList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    post:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 手动新增模块
+      description: |
+        创建一个空模块，并自动生成 **v1**（空模板正文，规则同总文档 `mode=empty`）。
+        项目内 **模块名称** 在规范化后须唯一（服务端比对规则：去首尾空白、连续空白压成单空格、不区分大小写）。
+      operationId: postRequirementDocModule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocModuleCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocModuleSummary"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/requirement-doc/modules/ai-split:
+    post:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — AI 按总需求拆分并生成各模块初稿
+      description: |
+        **输入**：始终读取项目下 **总需求文档当前最新版本** 的 Markdown 全文（服务端拉取，请求体不传正文）。
+
+        **模式 `full_replace`**：删除该项目下**全部**已有模块及其版本链，再按 AI 结果重建模块；每个模块写入 **v1** 正文（`markdown`）。
+
+        **模式 `incremental`**：**不修改**任何已有模块的元数据与版本数据；仅当 AI 返回的 **`title`** 经服务端规范化后与已有模块**均不相同**时，**新增**该模块及其 **v1**。标题相同（规范化后）的条目整段跳过（不合并、不覆盖）。
+
+        **AI 原始 JSON 约定**（供网关/Agent 解析后落库，字段名建议保持一致）：
+        ```json
+        {
+          "modules": [
+            {
+              "title": "认证与账号",
+              "summary": "单点登录、会话与账号生命周期",
+              "markdown": "# 认证与账号\\n\\n## 目标\\n…"
+            }
+          ]
+        }
+        ```
+        - `title`：模块名称；**增量判重**与手动建模块均按规范化标题比对（见上）。
+        - `summary`：短摘要，可空字符串。
+        - `markdown`：该模块 **v1** 完整细化需求正文（Markdown）。
+
+        **响应**：返回**当前**模块列表（与 `GET …/modules` 结构一致）及本次拆分摘要字段。
+      operationId: postRequirementDocModulesAiSplit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocModuleAiSplitRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocModuleAiSplitResult"
+        "400":
+          description: 总需求无最新版本不可拆分等
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/requirement-doc/modules/reorder:
+    put:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 调整模块顺序
+      description: |
+        `ordered_module_ids` 必须包含**当前**全部模块 id 各一次，顺序即为新 `sort_order`。
+      operationId: putRequirementDocModulesReorder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocModuleReorderBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocModuleList"
+        "400":
+          description: id 缺失或多余
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/requirement-doc/modules/{moduleId}:
+    patch:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 更新模块信息
+      operationId: patchRequirementDocModule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocModulePatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocModuleSummary"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 模块不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    delete:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 删除模块（含其全部版本）
+      operationId: deleteRequirementDocModule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 模块不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/requirement-doc/modules/{moduleId}/versions:
+    get:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 指定模块的版本列表
+      description: 契约字段与总文档 `…/requirement-doc/versions` 相同。
+      operationId: listRequirementDocModuleVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 模块不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    post:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 创建版本或保存为新版本
+      description: 请求体与总文档 `POST …/requirement-doc/versions` 一致。
+      operationId: postRequirementDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionCreateOrAppend"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "400":
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 模块不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/requirement-doc/modules/{moduleId}/versions/{versionId}:
+    get:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 版本详情
+      operationId: getRequirementDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    patch:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 覆盖当前版本正文
+      operationId: patchRequirementDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "400":
+          description: 非最新禁止覆盖
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    delete:
+      tags: [requirement-doc]
+      summary: 模块细化文档 — 删除指定版本
+      operationId: deleteRequirementDocModuleVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功，data 为更新后的该模块版本列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
   /api/v1/ai/invoke:
     post:
       tags: [ai]
@@ -468,13 +940,17 @@ paths:
       description: |
         通过 AI 网关调用具体能力（由后端根据 `capability` 与 `payload` 编排）。
 
-        对于 `capability = requirement_doc_assist`（REQ-M02 需求文档协作）：
+        对于 `capability = requirement_doc_assist`（REQ-M02 **总**需求文档协作）：
         - `payload.action = chat`
           - `payload.message`：用户本轮输入
           - 响应：`data.suggestion`（建议文本，前端会作为聊天回复逐字展示）
         - `payload.action = generate_doc`
           - `payload.message`：可为空（由历史 `payload.history` + `payload.default_prompt` 驱动）
           - 响应：`data.markdown`（完整需求文档 Markdown，前端应用到编辑器）
+
+        对于 `capability = requirement_module_doc_assist`（REQ-M02 **模块细化**文档协作）：
+        - 与 `requirement_doc_assist` 相同 `payload.action` 语义；建议 `payload` 携带 `module_id`、`module_title` 等便于 Agent 聚焦单模块。
+        - 响应字段同样为 `data.suggestion` / `data.markdown`（按 action）。
       requestBody:
         required: true
         content:
@@ -1099,6 +1575,126 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/RequirementDocVersionDetail"
+
+    RequirementDocModuleSummary:
+      type: object
+      required:
+        [id, title, summary, sort_order, version_count, latest_version_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+          description: 短摘要，可空字符串
+        sort_order:
+          type: integer
+          minimum: 0
+        version_count:
+          type: integer
+          minimum: 0
+        latest_version_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RequirementDocModuleListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementDocModuleSummary"
+
+    EnvelopeRequirementDocModuleList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/RequirementDocModuleListData"
+
+    EnvelopeRequirementDocModuleSummary:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/RequirementDocModuleSummary"
+
+    RequirementDocModuleCreateBody:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        summary:
+          type: string
+          default: ""
+
+    RequirementDocModulePatchBody:
+      type: object
+      properties:
+        title:
+          type: string
+        summary:
+          type: string
+
+    RequirementDocModuleReorderBody:
+      type: object
+      required: [ordered_module_ids]
+      properties:
+        ordered_module_ids:
+          type: array
+          items:
+            type: string
+          description: 须包含当前全部模块 id 各一次
+
+    RequirementDocModuleAiSplitRequest:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [full_replace, incremental]
+          description: full_replace 清空重建；incremental 仅新增规范化标题尚未存在的模块
+
+    RequirementDocModuleAiSplitResultData:
+      type: object
+      required: [items, mode, added_titles, skipped_titles]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementDocModuleSummary"
+        mode:
+          type: string
+          enum: [full_replace, incremental]
+        added_titles:
+          type: array
+          items:
+            type: string
+          description: 本次成功落库的新模块标题（全量时为全部新建；增量时为真正新增的）
+        skipped_titles:
+          type: array
+          items:
+            type: string
+          description: 增量模式下因「同名模块已存在」而跳过的 AI 建议标题；全量时为空数组
+
+    EnvelopeRequirementDocModuleAiSplitResult:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/RequirementDocModuleAiSplitResultData"
 
     AiProvider:
       type: string

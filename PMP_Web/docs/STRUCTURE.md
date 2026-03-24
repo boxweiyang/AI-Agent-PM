@@ -10,6 +10,9 @@
 | **[FEATURES.md](./FEATURES.md)** | **按页面** 说明用户可见功能、Mock 行为；**每完成一步前端开发** 应增量更新。 |
 | **STRUCTURE.md**（本文） | 目录、工程约定、路径与契约引用。 |
 | **[README.md](../README.md)** | 安装、运行、Node 版本、MSW 与开发习惯。 |
+| **[components/README.md](../src/components/README.md)** | **`src/components/`** 约定：一组件一文件夹、`index.ts`、各组件 **README**。 |
+| **[DiffDialog/README.md](../src/components/DiffDialog/README.md)** | 公用 **`DiffDialog`**：双稿左右对照、接受/回退；任意需要做 diff 的页面可复用。 |
+| **[AiAssistDrawer/README.md](../src/components/AiAssistDrawer/README.md)** | **`AiAssistDrawer`**：AI 抽屉 Props、Emits、接入示例与 `invoke` 约定（内嵌 **`DiffDialog`**）。 |
 
 ## Node 版本
 
@@ -28,27 +31,31 @@
 | `src/types/api-contract.ts` | 与 `contracts/openapi/openapi.yaml` 对齐的 **手写 TS 类型**（可后续改为 openapi-typescript 生成） |
 | `src/stores/auth.ts` | 登录态、用户摘要、`sessionStorage` 持久化（Mock 用；接真实后端时收敛 Refresh 存储方式） |
 | `src/stores/theme.ts` | **深色 / 浅色**：`localStorage` 键 `pmp_theme`；`html.dark` 与 Element Plus 暗色变量联动（TECH-002） |
-| `src/components/ThemeSegmented.vue` | 顶栏与登录页共用的「深色 / 浅色」切换（`el-radio-group`） |
+| `src/components/ThemeSegmented/` | **深色 / 浅色**切换（`el-radio-group`）；见 **README**；顶栏与登录页共用 |
 | `src/router/index.ts` | 路由表；`/login` 公开；`/` 套 `WorkbenchLayout`；`/projects/:id` 套 `ProjectLayout`；**导航守卫**校验登录与 `requiresSystemAdmin` |
 | `src/layouts/WorkbenchLayout.vue` | **工作台壳（无侧栏）**：顶栏 + `router-view`；`el-main` **`padding: 16px 50px`** |
 | `src/config/productBranding.ts` | 产品展示名 **`PRODUCT_DISPLAY_NAME`**（智能项目管理系统） |
 | `src/layouts/ProjectLayout.vue` | **项目壳**：侧栏 **三态** + 顶栏 + `router-view`；`el-main` **`padding: 16px 50px`**；品牌行 **48px** |
-| `src/components/PmpBrandMark.vue` | 侧栏 **品牌 SVG**（叠层条 + 圆点，`currentColor`） |
+| `src/components/PmpBrandMark/` | 侧栏 **品牌 SVG**（叠层条 + 圆点，`currentColor`）；见 **README** |
 | `src/config/projectModuleMenuIcons.ts` | 项目侧栏 **各模块菜单图标**（按路由名语义映射） |
-| `src/components/AppHeaderBar.vue` | 顶栏：**返回** + **面包屑全路径**（`headerBreadcrumbs.ts`）；设置页 **回到项目列表**；项目内 **切换项目**；**功能** 下拉、主题、用户、退出 |
+| `src/components/AppHeaderBar/` | 顶栏：**返回** + **面包屑**（`headerBreadcrumbs.ts`）；设置/项目内导航；**功能** 下拉、主题、用户、退出；见 **README** |
 | `src/utils/headerBreadcrumbs.ts` | 顶栏面包屑数据：`工作台` / `项目管理` / 设置子路径 / 项目内 `项目名` 与 `meta.title` |
-| `src/components/TechStackMultiSelect.vue` | 项目详情：技术栈 **多选下拉**（`el-select` multiple + allow-create） |
+| `src/components/TechStackMultiSelect/` | 项目详情：技术栈 **多选下拉**（`el-select` multiple + allow-create）；见 **README** |
 | `src/config/techStackOptions.ts` | 四类技术栈 **预设选项** + 字符串与数组互转（`parseStackItems` / `joinStackItems`） |
 | `src/config/projectSidebarNav.ts` | **项目内**侧栏分组（概览 + 各 REQ 模块；路由名与 `projectLayoutRoutes` 一致） |
 | `src/config/projectRelatedModules.ts` | **项目内**模块路由清单（与 `artifacts` 键对齐；由 `projectLayoutRoutes.ts` 注册） |
 | `src/features/auth/pages/Login.vue` | 登录页（Mock：`admin` / 任意密码） |
 | `src/features/workspace/routes.ts` | **工作台子路由**：`/`、`/projects`、`/enter-last-project`、`/settings/*`（挂到 `/` 下） |
-| `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：默认 Dashboard、`detail`、**`m02/requirements`（列表+详情）**、其余 `m0x/...` 占位 |
+| `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：Dashboard、`detail`、**`m02/requirements`（列表 + 总文档详情 + 模块细化详情）**、其余占位 |
 | `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`pages/requirements/*`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue`、`components/DashboardEchart.vue` |
 | `src/utils/requirementDocExport.ts` | 需求文档 **导出 MD/HTML** 与 **打印为 PDF**（`marked`） |
-| `src/utils/inlineTextDiff.ts` | 需求文档 AI **差异弹窗**中「修改」行的 **字词/字符级** 片段（`diff`：`diffChars` / `diffWordsWithSpace`） |
-| `diff`（`package.json`） | 行内文本对比（与 `RequirementDocVersionDetailPage` 弹窗配合） |
-| `src/mocks/requirementDocStore.ts` | MSW 内存：**需求文档版本**链（最新判定、预置 `proj-demo-1` 示例） |
+| `src/utils/inlineTextDiff.ts` | **`DiffDialog`** 中「修改」行的 **字词/字符级** 片段（`diff`：`diffChars` / `diffWordsWithSpace`） |
+| `src/utils/aiAssistDiffGrid.ts` | 行级 LCS 网格数据，供 **`DiffDialog`** 渲染 |
+| `src/components/DiffDialog/` | 公用 **差异弹窗**（`index.ts` 默认导出）；**`AiAssistDrawer`** 等调用方按需传入表头与文案 |
+| `src/components/AiAssistDrawer/` | AI 抽屉 + **README**；`index.ts` 仅默认导出抽屉；diff UI 使用 **`DiffDialog`** |
+| `diff`（`package.json`） | 行内文本对比（`inlineTextDiff`） |
+| `src/mocks/requirementDocStore.ts` | MSW 内存：**总需求文档**版本链 |
+| `src/mocks/requirementModuleDocStore.ts` | MSW：**模块细化**（模块元数据 + 每模块版本链、**`ai-split`** 演示数据） |
 | `src/features/workspace/dashboardChartOptions.ts` | Dashboard **ECharts option** 生成（Mock），由 `buildProjectDashboard` 组装进 `cards[].charts` |
 | `echarts`（`package.json`） | Dashboard 卡片内图表（core 按需注册于 `DashboardEchart.vue`） |
 | `src/features/workspace/pages/ProjectDetail.vue` | 项目详情（`.../detail`；GET/PATCH 单项目） |

@@ -13,7 +13,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 
-import AppHeaderBar from '@/components/AppHeaderBar.vue'
+import AppHeaderBar from '@/components/AppHeaderBar'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()

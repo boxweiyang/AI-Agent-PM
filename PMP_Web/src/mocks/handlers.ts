@@ -14,7 +14,27 @@ import {
   listRequirementDocVersions,
   patchRequirementDocVersion,
 } from '@/mocks/requirementDocStore'
-import type { RequirementDocVersionCreateOrAppendBody } from '@/types/api-contract'
+import {
+  aiSplitRequirementDocModules,
+  appendRequirementDocModuleVersion,
+  createRequirementDocModule,
+  createRequirementDocModuleVersion,
+  deleteRequirementDocModule,
+  deleteRequirementDocModuleVersion,
+  getRequirementDocModuleVersion,
+  listRequirementDocModuleVersions,
+  listRequirementDocModules,
+  patchRequirementDocModule,
+  patchRequirementDocModuleVersion,
+  reorderRequirementDocModules,
+} from '@/mocks/requirementModuleDocStore'
+import type {
+  RequirementDocModuleAiSplitRequest,
+  RequirementDocModuleCreateBody,
+  RequirementDocModulePatchBody,
+  RequirementDocModuleReorderBody,
+  RequirementDocVersionCreateOrAppendBody,
+} from '@/types/api-contract'
 
 type AiInvokeBody = {
   capability?: string
@@ -542,6 +562,260 @@ export const handlers = [
     })
   }),
 
+  /** 模块细化：列表 */
+  http.get('/api/v1/projects/:projectId/requirement-doc/modules', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: listRequirementDocModules(projectId) })
+  }),
+
+  /** 模块细化：手动新建 */
+  http.post('/api/v1/projects/:projectId/requirement-doc/modules', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let body: RequirementDocModuleCreateBody = { title: '' }
+    try {
+      body = (await request.json()) as RequirementDocModuleCreateBody
+    } catch {
+      /* ignore */
+    }
+    const title = typeof body.title === 'string' ? body.title : ''
+    if (!title.trim()) {
+      return HttpResponse.json({ code: 40001, message: 'title 必填', data: null })
+    }
+    const r = createRequirementDocModule(
+      projectId,
+      title,
+      typeof body.summary === 'string' ? body.summary : '',
+    )
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40002, message: r.message, data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.summary })
+  }),
+
+  /** 模块细化：AI 拆分 */
+  http.post('/api/v1/projects/:projectId/requirement-doc/modules/ai-split', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let body: RequirementDocModuleAiSplitRequest = { mode: 'full_replace' }
+    try {
+      body = (await request.json()) as RequirementDocModuleAiSplitRequest
+    } catch {
+      /* ignore */
+    }
+    const mode = body.mode === 'incremental' ? 'incremental' : 'full_replace'
+    const r = aiSplitRequirementDocModules(projectId, mode)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40003, message: r.message, data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  /** 模块细化：排序 */
+  http.put('/api/v1/projects/:projectId/requirement-doc/modules/reorder', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let body: RequirementDocModuleReorderBody = { ordered_module_ids: [] }
+    try {
+      body = (await request.json()) as RequirementDocModuleReorderBody
+    } catch {
+      /* ignore */
+    }
+    const ids = Array.isArray(body.ordered_module_ids) ? body.ordered_module_ids : []
+    const r = reorderRequirementDocModules(projectId, ids)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40004, message: r.message, data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.list })
+  }),
+
+  http.get(
+    '/api/v1/projects/:projectId/requirement-doc/modules/:moduleId/versions/:versionId',
+    ({ request, params }) => {
+      if (!bearerOk(request)) {
+        return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+      }
+      const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+      const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+      const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+      if (!mockProjects.find((r) => r.id === projectId)) {
+        return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+      }
+      const r = getRequirementDocModuleVersion(projectId, moduleId, versionId)
+      if (!r.ok) {
+        const code = r.message === '模块不存在' ? 40402 : 40403
+        return HttpResponse.json({ code, message: r.message, data: null })
+      }
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    },
+  ),
+
+  http.patch(
+    '/api/v1/projects/:projectId/requirement-doc/modules/:moduleId/versions/:versionId',
+    async ({ request, params }) => {
+      if (!bearerOk(request)) {
+        return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+      }
+      const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+      const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+      const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+      if (!mockProjects.find((r) => r.id === projectId)) {
+        return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+      }
+      let markdown = ''
+      try {
+        const b = (await request.json()) as { markdown?: string }
+        markdown = typeof b.markdown === 'string' ? b.markdown : ''
+      } catch {
+        /* ignore */
+      }
+      const r = patchRequirementDocModuleVersion(projectId, moduleId, versionId, markdown)
+      if (!r.ok) {
+        return HttpResponse.json({ code: 40003, message: r.message, data: null })
+      }
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    },
+  ),
+
+  http.delete(
+    '/api/v1/projects/:projectId/requirement-doc/modules/:moduleId/versions/:versionId',
+    ({ request, params }) => {
+      if (!bearerOk(request)) {
+        return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+      }
+      const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+      const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+      const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+      if (!mockProjects.find((r) => r.id === projectId)) {
+        return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+      }
+      const r = deleteRequirementDocModuleVersion(projectId, moduleId, versionId)
+      if (!r.ok) {
+        return HttpResponse.json({ code: 40402, message: r.message, data: null })
+      }
+      return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+    },
+  ),
+
+  http.post(
+    '/api/v1/projects/:projectId/requirement-doc/modules/:moduleId/versions',
+    async ({ request, params }) => {
+      if (!bearerOk(request)) {
+        return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+      }
+      const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+      const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+      if (!mockProjects.find((r) => r.id === projectId)) {
+        return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+      }
+      let body: RequirementDocVersionCreateOrAppendBody = {}
+      try {
+        body = (await request.json()) as RequirementDocVersionCreateOrAppendBody
+      } catch {
+        /* ignore */
+      }
+      if (typeof body.markdown === 'string' && typeof body.based_on_version_id === 'string') {
+        const r = appendRequirementDocModuleVersion(
+          projectId,
+          moduleId,
+          body.markdown,
+          body.based_on_version_id,
+        )
+        if (!r.ok) {
+          return HttpResponse.json({ code: 40002, message: r.message, data: null })
+        }
+        return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+      }
+      if (body.mode === 'empty' || body.mode === 'from_latest') {
+        const r = createRequirementDocModuleVersion(projectId, moduleId, body.mode)
+        if (!r.ok) {
+          return HttpResponse.json({ code: 40402, message: r.message, data: null })
+        }
+        return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+      }
+      return HttpResponse.json({
+        code: 40001,
+        message: '请求体需包含 mode（empty|from_latest）或 markdown + based_on_version_id',
+        data: null,
+      })
+    },
+  ),
+
+  http.get('/api/v1/projects/:projectId/requirement-doc/modules/:moduleId/versions', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const r = listRequirementDocModuleVersions(projectId, moduleId)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40402, message: r.message, data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/requirement-doc/modules/:moduleId', async ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    let body: RequirementDocModulePatchBody = {}
+    try {
+      body = (await request.json()) as RequirementDocModulePatchBody
+    } catch {
+      /* ignore */
+    }
+    const r = patchRequirementDocModule(projectId, moduleId, body)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40402, message: r.message, data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.summary })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/requirement-doc/modules/:moduleId', ({ request, params }) => {
+    if (!bearerOk(request)) {
+      return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    }
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const moduleId = typeof params.moduleId === 'string' ? params.moduleId : params.moduleId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) {
+      return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    }
+    const r = deleteRequirementDocModule(projectId, moduleId)
+    if (!r.ok) {
+      return HttpResponse.json({ code: 40402, message: r.message, data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
   /** 项目详情：按 id 查找内存列表 */
   http.get('/api/v1/projects/:projectId', ({ request, params }) => {
     if (!bearerOk(request)) {
@@ -640,12 +914,16 @@ export const handlers = [
         },
       })
     }
-    if (capability === 'requirement_doc_assist') {
+    if (capability === 'requirement_doc_assist' || capability === 'requirement_module_doc_assist') {
       const payload = body.payload ?? {}
       const action = String(payload?.action ?? 'chat')
       const message = String(payload?.message ?? '').trim()
       const markdown = String(payload?.markdown ?? '').trim()
       const lineCount = markdown ? markdown.split('\n').length : 0
+      const modHint =
+        capability === 'requirement_module_doc_assist'
+          ? `\n\n【模块上下文】module_id=${String(payload?.module_id ?? '')} title=${String(payload?.module_title ?? '')}`
+          : ''
 
       if (action === 'generate_doc') {
         const excerpt = message ? message.slice(0, 120) : '（未提供具体诉求）'
@@ -709,6 +987,7 @@ ${message || '（未提供）'}
 
 ### 当前文档状态
 - 已有行数：${lineCount}
+${modHint}
 `,
         },
       })

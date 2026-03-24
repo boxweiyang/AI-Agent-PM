@@ -31,6 +31,12 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     meta: { title: '项目详情' },
   },
   {
+    path: 'm02/requirements/modules/:moduleId/versions/:versionId',
+    name: 'project-m02-requirements-module-version',
+    component: () => import('./pages/requirements/RequirementModuleDocVersionDetailPage.vue'),
+    meta: { title: '模块细化文档', artifactKey: 'req_doc', reqRef: 'REQ-M02' },
+  },
+  {
     path: 'm02/requirements/versions/:versionId',
     name: 'project-m02-requirements-version',
     component: () => import('./pages/requirements/RequirementDocVersionDetailPage.vue'),

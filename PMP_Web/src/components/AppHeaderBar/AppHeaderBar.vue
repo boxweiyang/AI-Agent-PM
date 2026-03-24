@@ -67,7 +67,7 @@ import { computed } from 'vue'
 import { ArrowDown, ArrowLeft, Switch } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import ThemeSegmented from '@/components/ThemeSegmented.vue'
+import ThemeSegmented from '@/components/ThemeSegmented'
 import { useAuthStore } from '@/stores/auth'
 import { buildHeaderBreadcrumbs } from '@/utils/headerBreadcrumbs'
 

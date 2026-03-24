@@ -50,8 +50,9 @@
 | `/projects/:projectId` | （重定向） | `ProjectLayout` → 默认 **`/dashboard`** | — |
 | `/projects/:projectId/dashboard` | 项目 Dashboard | `ProjectLayout` + `ProjectDashboard.vue` | REQ-M08：`GET …/dashboard` + MSW；迭代筛选、指标卡片、风险列表、下钻、AI 摘要抽屉（Mock） |
 | `/projects/:projectId/detail` | 项目详情 | `ProjectLayout` + `ProjectDetail.vue` | M01、可编辑、模块入口 |
-| `/projects/:projectId/m02/requirements` | 需求与文档（版本列表） | `ProjectLayout` + `requirements/RequirementDocListPage.vue` | REQ-M02；`GET/POST/DELETE …/requirement-doc/versions` + MSW；导出 MD/HTML/PDF（打印） |
-| `/projects/:projectId/m02/requirements/versions/:versionId` | 需求文档版本详情 | `ProjectLayout` + `requirements/RequirementDocVersionDetailPage.vue` | Markdown 编辑/预览切换；保存弹窗 **新建版本 / 覆盖**；仅 **最新** 可保存；**AI 辅助**：已有正文时 **行级左右对照**（行号对齐、未改/删/增/改 底色 + 图例；超大文档时简化 diff 有提示） |
+| `/projects/:projectId/m02/requirements` | 需求与文档（版本列表） | `ProjectLayout` + `requirements/RequirementDocListPage.vue` | REQ-M02；**Tab**：总 **`需求文档`** / **`模块细化文档`**（`?tab=modules`）；总文档 API + 模块树 API（见契约 **v0.3.0**）；**勾选两版** + **`DiffDialog` 只读** |
+| `/projects/:projectId/m02/requirements/versions/:versionId` | 需求文档版本详情 | `ProjectLayout` + `requirements/RequirementDocVersionDetailPage.vue` | Markdown 编辑/预览；保存 **新建 / 覆盖**；**`capability: requirement_doc_assist`** + diff |
+| `/projects/:projectId/m02/requirements/modules/:moduleId/versions/:versionId` | 模块细化文档版本详情 | `ProjectLayout` + `requirements/RequirementModuleDocVersionDetailPage.vue` | 与总文档详情能力对齐；**`capability: requirement_module_doc_assist`**；保存后回列表并带 **`?tab=modules`** |
 | `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02B～M11；`artifacts` 驱动已生成/去生成 |
 
 ---
@@ -117,10 +118,10 @@
 ## 6.1.2 `/projects/:projectId/m02/requirements` 需求与文档（REQ-M02，V1）
 
 - **入口**：侧栏 **需求与文档** → **版本列表**（非直接进入长文档编辑）。
-- **契约**：**`contracts/openapi/openapi.yaml` v0.2.9** `…/requirement-doc/versions`；MSW 见 **`handlers.ts`** + **`mocks/requirementDocStore.ts`**（`proj-demo-1` 预置两版示例）。
-- **列表**：表格展示 `version_no`、时间、摘要；**打开** 进详情；**每行导出** MD / HTML / **PDF（新窗口打印为 PDF）**；**删除**（删最新后上一版成为最新）；**导出最新** 下拉；**创建首版** / **基于最新版创建** / **新建空白版本**（`POST` + `mode`）。
-- **详情**：**编辑 / 预览** 切换（`marked` 渲染）；**仅当前「最新」版本** 显示 **保存**；保存前 **`el-dialog`** 选 **新建版本**（`POST` + `markdown` + `based_on_version_id`）或 **覆盖当前版本**（`PATCH`）；历史版本 **只读** 可导出。
-- **AI 辅助**：抽屉内对话与「按现有需求生成文档」；**正文为空** 时生成后直接打字回填；**正文已有** 时在 **`el-dialog` 差异对比** 中 **单行网格：左行号+原版 / 右行号+建议稿**（LCS 行 diff；连续「删块+增块」按行配对为 **修改**；**删除** 仅左有字、**新增** 仅右有字、**未改** 灰白底、**修改** 左浅红系/右浅绿系整行底 + **行内字词/字符级** 片段垫色：`diff` 库 **`diffChars` / `diffWordsWithSpace`**，见 `utils/inlineTextDiff.ts`）；超大文本超过阈值时 **整块删+整块增** 简化对比并 `el-alert` 提示。接受/回退与对话上下文截断逻辑不变。
+- **契约**：**`contracts/openapi/openapi.yaml` v0.3.0**：总文档 `…/requirement-doc/versions`；模块细化 `…/requirement-doc/modules`、嵌套 `…/modules/{moduleId}/versions`、`POST …/modules/ai-split`（**`full_replace` | `incremental`**）。MSW：**`handlers.ts`** + **`requirementDocStore.ts`** + **`requirementModuleDocStore.ts`**。
+- **Tab「需求文档」**：表格 `version_no`、时间、摘要；**多选两版** → **`DiffDialog` 只读**；**打开** / **导出** / **删除** / **创建版本**（同前）。
+- **Tab「模块细化文档」**（`RequirementModuleDocPanel`）：**AI 模块化拆分**（读**最新总需求**；已有模块时弹窗选 **全部覆盖** 或 **仅增量新增**——增量**不改**已有模块，只新增**规范化标题**尚未存在的模块）；**可展开表** 一行一模块，子表为该模块**版本列表**（操作与总文档列表一致）；模块 **增删改**、**上移/下移**（`PUT …/modules/reorder`）；详情路由 **`…/modules/:moduleId/versions/:versionId`**。
+- **详情（总 / 模块）**：**编辑 / 预览**；仅 **最新** 可 **保存**（新建版本 / 覆盖）；**AI 抽屉** 分别 **`requirement_doc_assist`** / **`requirement_module_doc_assist`**；模块详情保存后回 **`?tab=modules`**。
 - **`artifacts.req_doc`**：未生成时与占位页一致，**一键生成** 后可用上述接口。
 
 ## 6.1.3 项目内模块占位页
@@ -165,6 +166,10 @@
 | 2026-03-24 | 差异弹窗：**行号对齐** + 行背景区分 **未改/删除/新增/修改**（修改=同序「删块+增块」按行配对）；**图例** + 超大文档 **简化 diff** 警告；弹窗 **1180px**。 |
 | 2026-03-24 | 差异弹窗 **Git 风格**：行首 **`−`/`+`**；删除/新增/修改行 **红绿前景色 + 浅色半透明底**（`html.dark` 单独 token）；左侧 **色条** 提示。 |
 | 2026-03-24 | **「修改」行内高亮**：依赖 **`diff`**（`diffChars` / `diffWordsWithSpace`）；`inlineTextDiff.ts` 生成左右片段；超长单行自动用词级 diff 降耗。 |
+| 2026-03-24 | **架构**：差异弹窗为公用 **`DiffDialog`**（`components/DiffDialog/` + `aiAssistDiffGrid.ts`）；**`AiAssistDrawer`** 为调用方之一；需求详情页只传 `document-text` / `anchor-assistant-id` / `allow-apply`，不再本地挂 diff 弹窗。 |
+| 2026-03-24 | **`src/components/`** 改为**一组件一文件夹**（`index.ts` 默认导出 + **README**）；可复用 UI 提至顶层（如 **`DiffDialog`**）。约定见 **`components/README.md`**。 |
+| 2026-03-24 | **需求文档列表**：表格 **勾选两版** + **`DiffDialog`** **`readOnly`** 对比正文（无接受/回退）；**`DiffDialog`** 新增 `title` / `readOnly`。 |
+| 2026-03-24 | **REQ-M02 模块细化**：契约 **v0.3.0**；列表页 **双 Tab**；**AI 拆分** + 可展开模块/版本表；**`RequirementModuleDocVersionDetailPage`**；MSW **`requirementModuleDocStore`**；AI Mock 支持 **`requirement_module_doc_assist`**。 |
 
 ---
 

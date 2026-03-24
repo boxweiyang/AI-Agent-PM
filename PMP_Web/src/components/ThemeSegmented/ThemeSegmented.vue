@@ -1,7 +1,7 @@
 <!--
   深色 / 浅色切换（TECH-002）
   - 与 Element Plus 的 html.dark 方案配合；任意页面可嵌入。
-  - 用户可见行为说明见 docs/FEATURES.md「跨页面 → 深浅色主题」。
+  - 用户可见行为说明见 docs/FEATURES.md「跨页面 → 深浅色主题」；用法见同目录 README.md。
 -->
 <template>
   <el-radio-group v-model="modeProxy" class="theme-segmented" size="small">

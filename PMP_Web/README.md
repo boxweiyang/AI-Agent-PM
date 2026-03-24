@@ -83,6 +83,9 @@ npm run build
 
 - **工程结构、约定**：[**docs/STRUCTURE.md**](./docs/STRUCTURE.md)（目录树以 REQ **TECH-003** 为准）。
 - **按页面介绍功能**（随开发更新）：[**docs/FEATURES.md**](./docs/FEATURES.md)。
+- **差异弹窗**（公用 **`DiffDialog`**）：[**src/components/DiffDialog/README.md**](./src/components/DiffDialog/README.md)（任意双稿对比场景可复用）。
+- **AI 辅助抽屉**（**`AiAssistDrawer`**，内嵌 **`DiffDialog`**）：[**src/components/AiAssistDrawer/README.md**](./src/components/AiAssistDrawer/README.md)（传参、事件、接入示例）。
+- **组件目录约定**：[**src/components/README.md**](./src/components/README.md)（一组件一文件夹、`index.ts` 导出）。
 
 ## OpenAPI 类型生成（后续）
 
