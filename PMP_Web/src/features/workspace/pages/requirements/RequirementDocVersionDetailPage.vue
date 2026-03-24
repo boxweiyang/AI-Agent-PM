@@ -111,25 +111,76 @@
     <el-dialog
       v-model="diffDialogVisible"
       title="差异对比"
-      width="920px"
+      width="1180px"
+      class="diff-dialog"
       destroy-on-close
       :close-on-click-modal="false"
       @closed="onDiffDialogClosed"
     >
-      <p class="dialog-lead">AI 将在当前正文基础上做修改。请确认后选择接受或回退。</p>
-      <el-scrollbar height="520px" class="diff-scroll">
-        <div class="diff-lines">
-          <div
-            v-for="(d, idx) in diffLinesRender"
-            :key="idx"
-            class="diff-line"
-            :class="`is-${d.kind}`"
-          >
-            <span class="diff-prefix">{{ d.kind === 'add' ? '+' : d.kind === 'del' ? '-' : ' ' }}</span>
-            <span class="diff-text" :title="d.line">{{ d.line }}</span>
+      <p class="dialog-lead">
+        Git 风格对照：<strong>−</strong> 删除 / 旧行，<strong>+</strong> 新增 / 新行；<strong>修改</strong>行在左右两侧对<strong>差异片段</strong>单独着色（字词或字符级）。图例：
+        <span class="diff-legend">
+          <span class="diff-legend-chip is-equal">未改</span>
+          <span class="diff-legend-chip is-del"><span class="diff-legend-sign">−</span>删除</span>
+          <span class="diff-legend-chip is-add"><span class="diff-legend-sign">+</span>新增</span>
+          <span class="diff-legend-chip is-change"><span class="diff-legend-sign">−</span>/<span class="diff-legend-sign">+</span>修改（行内着色）</span>
+        </span>
+      </p>
+      <el-alert
+        v-if="diffView.truncated"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="diff-truncate-alert"
+        title="差异计算量较大，已改用简化对比（整块删除再整块新增）。若需更细对比可缩短文档后再试。"
+      />
+      <div ref="diffScrollUnifiedRef" class="diff-unified-scroll" role="region" aria-label="行级差异对照">
+        <div class="diff-grid-head" aria-hidden="true">
+          <span class="diff-h-gutter">行</span>
+          <span class="diff-h-code">原版（当前正文）</span>
+          <span class="diff-h-gutter">行</span>
+          <span class="diff-h-code">新版（AI 建议）</span>
+        </div>
+        <div v-if="diffView.rows.length === 0" class="diff-empty">两版内容相同或均为空。</div>
+        <div
+          v-for="(row, idx) in diffView.rows"
+          v-else
+          :key="idx"
+          class="diff-grid-row"
+          :class="`diff-grid-row--${row.variant}`"
+        >
+          <div class="diff-gutter diff-gutter--old">{{ row.oldNum === null ? '—' : row.oldNum }}</div>
+          <div class="diff-code diff-code--old" :class="`tone-${row.leftTone}`">
+            <span class="diff-prefix-char" aria-hidden="true">{{ diffPrefixLeft(row) }}</span>
+            <span class="diff-code-inner">
+              <template v-if="row.variant === 'change' && row.inlineLeft?.length">
+                <span
+                  v-for="(seg, si) in row.inlineLeft"
+                  :key="`L${idx}-${si}`"
+                  class="diff-inline"
+                  :class="`diff-inline--${seg.mark}`"
+                >{{ seg.value }}</span>
+              </template>
+              <template v-else>{{ row.left }}</template>
+            </span>
+          </div>
+          <div class="diff-gutter diff-gutter--new">{{ row.newNum === null ? '—' : row.newNum }}</div>
+          <div class="diff-code diff-code--new" :class="`tone-${row.rightTone}`">
+            <span class="diff-prefix-char" aria-hidden="true">{{ diffPrefixRight(row) }}</span>
+            <span class="diff-code-inner">
+              <template v-if="row.variant === 'change' && row.inlineRight?.length">
+                <span
+                  v-for="(seg, si) in row.inlineRight"
+                  :key="`R${idx}-${si}`"
+                  class="diff-inline"
+                  :class="`diff-inline--${seg.mark}`"
+                >{{ seg.value }}</span>
+              </template>
+              <template v-else>{{ row.right }}</template>
+            </span>
           </div>
         </div>
-      </el-scrollbar>
+      </div>
       <template #footer>
         <el-button @click="onRollbackDiff">回退</el-button>
         <el-button type="primary" plain @click="onAcceptDiff">接受</el-button>
@@ -153,6 +204,7 @@ import type {
   ProjectPatchRequestBody,
   RequirementDocVersionDetail,
 } from '@/types/api-contract'
+import { buildChangeInlineSegments, type InlineSeg } from '@/utils/inlineTextDiff'
 import {
   exportRequirementHtml,
   exportRequirementMarkdown,
@@ -181,8 +233,207 @@ const diffDialogVisible = ref(false)
 const diffOldMd = ref('')
 const diffNewMd = ref('')
 const proposedAssistantId = ref<string | null>(null)
-const diffLinesRender = ref<Array<{ kind: 'equal' | 'add' | 'del'; line: string }>>([])
 const diffAction = ref<'accept' | 'rollback' | null>(null)
+
+/** 单行滚动容器：左右列在同一行网格内天然对齐 */
+const diffScrollUnifiedRef = ref<HTMLElement | null>(null)
+
+/** 行级 diff：LCS + 连续「删块+增块」按行 zip 为「修改」，供左右行号与底色 */
+type LineOpKind = 'equal' | 'del' | 'add'
+type LineOp = { kind: LineOpKind; line: string }
+type RefinedKind = 'equal' | 'change' | 'del' | 'add'
+type DiffRowVariant = 'equal' | 'del' | 'add' | 'change'
+type DiffGridRow = {
+  variant: DiffRowVariant
+  oldNum: number | null
+  newNum: number | null
+  left: string
+  right: string
+  leftTone: 'eq' | 'del' | 'pad' | 'chgL'
+  rightTone: 'eq' | 'add' | 'pad' | 'chgR'
+  /** 仅「修改」行：左右行内片段（字词/字符级高亮） */
+  inlineLeft?: InlineSeg[]
+  inlineRight?: InlineSeg[]
+}
+
+const DIFF_LCS_MAX_CELLS = 520 * 520
+
+function lineDiffLCS(oldLines: string[], newLines: string[]): { ops: LineOp[]; truncated: boolean } {
+  const m = oldLines.length
+  const n = newLines.length
+  if (m === 0 && n === 0) return { ops: [], truncated: false }
+  if (m * n > DIFF_LCS_MAX_CELLS) {
+    const ops: LineOp[] = []
+    for (const line of oldLines) ops.push({ kind: 'del', line })
+    for (const line of newLines) ops.push({ kind: 'add', line })
+    return { ops, truncated: true }
+  }
+
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i -= 1) {
+    for (let j = n - 1; j >= 0; j -= 1) {
+      dp[i][j] =
+        oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+
+  const ops: LineOp[] = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (oldLines[i] === newLines[j]) {
+      ops.push({ kind: 'equal', line: oldLines[i] })
+      i += 1
+      j += 1
+      continue
+    }
+    if (dp[i + 1][j] >= dp[i][j + 1]) {
+      ops.push({ kind: 'del', line: oldLines[i] })
+      i += 1
+    } else {
+      ops.push({ kind: 'add', line: newLines[j] })
+      j += 1
+    }
+  }
+  while (i < m) {
+    ops.push({ kind: 'del', line: oldLines[i] })
+    i += 1
+  }
+  while (j < n) {
+    ops.push({ kind: 'add', line: newLines[j] })
+    j += 1
+  }
+  return { ops, truncated: false }
+}
+
+/** 将 LCS 输出的 del 连续块 + 紧随其后的 add 连续块，按行号 zip 成「修改」；剩余删/增单独成行 */
+function refineLineOpsToPairs(ops: LineOp[]): Array<{ kind: RefinedKind; left: string; right: string }> {
+  const out: Array<{ kind: RefinedKind; left: string; right: string }> = []
+  let idx = 0
+  while (idx < ops.length) {
+    const op = ops[idx]
+    if (op.kind === 'equal') {
+      out.push({ kind: 'equal', left: op.line, right: op.line })
+      idx += 1
+      continue
+    }
+    if (op.kind === 'del') {
+      const dels: string[] = []
+      while (idx < ops.length && ops[idx].kind === 'del') {
+        dels.push(ops[idx].line)
+        idx += 1
+      }
+      const adds: string[] = []
+      while (idx < ops.length && ops[idx].kind === 'add') {
+        adds.push(ops[idx].line)
+        idx += 1
+      }
+      const maxLen = Math.max(dels.length, adds.length)
+      for (let k = 0; k < maxLen; k += 1) {
+        const d = dels[k]
+        const a = adds[k]
+        if (d !== undefined && a !== undefined) {
+          out.push({ kind: 'change', left: d, right: a })
+        } else if (d !== undefined) {
+          out.push({ kind: 'del', left: d, right: '' })
+        } else if (a !== undefined) {
+          out.push({ kind: 'add', left: '', right: a })
+        }
+      }
+      continue
+    }
+    // 开头或中间的孤立 add
+    const adds: string[] = []
+    while (idx < ops.length && ops[idx].kind === 'add') {
+      adds.push(ops[idx].line)
+      idx += 1
+    }
+    for (const a of adds) {
+      out.push({ kind: 'add', left: '', right: a })
+    }
+  }
+  return out
+}
+
+function emptyCell(s: string): string {
+  return s.length ? s : '\u00a0'
+}
+
+function buildDiffGridRows(oldText: string, newText: string): { rows: DiffGridRow[]; truncated: boolean } {
+  const oldLines = (oldText ?? '').split('\n')
+  const newLines = (newText ?? '').split('\n')
+  const { ops, truncated } = lineDiffLCS(oldLines, newLines)
+  const pairs = refineLineOpsToPairs(ops)
+  const rows: DiffGridRow[] = []
+  let oldNum = 1
+  let newNum = 1
+  for (const p of pairs) {
+    if (p.kind === 'equal') {
+      rows.push({
+        variant: 'equal',
+        oldNum,
+        newNum,
+        left: p.left,
+        right: p.right,
+        leftTone: 'eq',
+        rightTone: 'eq',
+      })
+      oldNum += 1
+      newNum += 1
+    } else if (p.kind === 'change') {
+      const { left: inlineLeft, right: inlineRight } = buildChangeInlineSegments(p.left, p.right)
+      rows.push({
+        variant: 'change',
+        oldNum,
+        newNum,
+        left: p.left,
+        right: p.right,
+        leftTone: 'chgL',
+        rightTone: 'chgR',
+        inlineLeft,
+        inlineRight,
+      })
+      oldNum += 1
+      newNum += 1
+    } else if (p.kind === 'del') {
+      rows.push({
+        variant: 'del',
+        oldNum,
+        newNum: null,
+        left: p.left,
+        right: emptyCell(p.right),
+        leftTone: 'del',
+        rightTone: 'pad',
+      })
+      oldNum += 1
+    } else {
+      rows.push({
+        variant: 'add',
+        oldNum: null,
+        newNum,
+        left: emptyCell(p.left),
+        right: p.right,
+        leftTone: 'pad',
+        rightTone: 'add',
+      })
+      newNum += 1
+    }
+  }
+  return { rows, truncated }
+}
+
+/** 行首符号：与 Git diff 一致，便于扫读 */
+function diffPrefixLeft(row: DiffGridRow): string {
+  if (row.leftTone === 'del' || row.leftTone === 'chgL') return '-'
+  return ' '
+}
+
+function diffPrefixRight(row: DiffGridRow): string {
+  if (row.rightTone === 'add' || row.rightTone === 'chgR') return '+'
+  return ' '
+}
+
+const diffView = computed(() => buildDiffGridRows(diffOldMd.value, diffNewMd.value))
 
 const artifactKey = computed(() => (route.meta.artifactKey as string) ?? '')
 const reqRef = computed(() => (route.meta.reqRef as string) ?? '')
@@ -419,7 +670,6 @@ function openDiffDialog(oldText: string, newText: string, assistantId: string) {
   diffOldMd.value = oldText ?? ''
   diffNewMd.value = newText ?? ''
   proposedAssistantId.value = assistantId
-  diffLinesRender.value = buildLineDiff(diffOldMd.value, diffNewMd.value)
   diffAction.value = null
   diffDialogVisible.value = true
 }
@@ -427,7 +677,6 @@ function openDiffDialog(oldText: string, newText: string, assistantId: string) {
 function closeDiffDialog() {
   diffDialogVisible.value = false
   proposedAssistantId.value = null
-  diffLinesRender.value = []
 }
 
 function onAcceptDiff() {
@@ -441,6 +690,7 @@ function onAcceptDiff() {
   aiDrawerRef.value?.truncateHistoryToAssistantId(proposedAssistantId.value)
   applyMarkdownWithTyping(diffNewMd.value, proposedAssistantId.value)
   closeDiffDialog()
+  aiVisible.value = false
 }
 
 function onRollbackDiff() {
@@ -460,57 +710,6 @@ function handleAiPropose(payload: { assistantId: string; markdown: string }) {
     return
   }
   openDiffDialog(markdown.value, payload.markdown, payload.assistantId)
-}
-
-function buildLineDiff(oldText: string, newText: string): Array<{ kind: 'equal' | 'add' | 'del'; line: string }> {
-  const oldLines = (oldText ?? '').split('\n')
-  const newLines = (newText ?? '').split('\n')
-
-  const m = oldLines.length
-  const n = newLines.length
-  const maxCells = 600 * 600
-  if (m * n > maxCells) {
-    const out: Array<{ kind: 'equal' | 'add' | 'del'; line: string }> = []
-    for (const line of oldLines) out.push({ kind: 'del', line })
-    for (const line of newLines) out.push({ kind: 'add', line })
-    return out
-  }
-
-  // LCS DP：行级 diff 的最小实现（用于 MVP 展示差别）
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
-  for (let i = m - 1; i >= 0; i -= 1) {
-    for (let j = n - 1; j >= 0; j -= 1) {
-      dp[i][j] = oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
-    }
-  }
-
-  const out: Array<{ kind: 'equal' | 'add' | 'del'; line: string }> = []
-  let i = 0
-  let j = 0
-  while (i < m && j < n) {
-    if (oldLines[i] === newLines[j]) {
-      out.push({ kind: 'equal', line: oldLines[i] })
-      i += 1
-      j += 1
-      continue
-    }
-    if (dp[i + 1][j] >= dp[i][j + 1]) {
-      out.push({ kind: 'del', line: oldLines[i] })
-      i += 1
-    } else {
-      out.push({ kind: 'add', line: newLines[j] })
-      j += 1
-    }
-  }
-  while (i < m) {
-    out.push({ kind: 'del', line: oldLines[i] })
-    i += 1
-  }
-  while (j < n) {
-    out.push({ kind: 'add', line: newLines[j] })
-    j += 1
-  }
-  return out
 }
 
 watch(
@@ -658,47 +857,285 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-.diff-scroll {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  background: var(--el-fill-color-blank);
-  padding: 8px 10px;
+.diff-dialog :deep(.el-dialog__body) {
+  padding-top: 8px;
 }
 
-.diff-lines {
+.diff-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.diff-legend-sign {
+  display: inline-block;
+  margin-right: 3px;
+  font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12.5px;
-  line-height: 1.55;
 }
 
-.diff-line {
-  display: flex;
-  gap: 10px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: 2px 0;
+.diff-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.diff-prefix {
-  width: 18px;
-  flex-shrink: 0;
-  text-align: right;
+.diff-legend-chip.is-equal {
+  background: var(--diff-legend-bg-ctx, var(--el-fill-color-light));
   color: var(--el-text-color-secondary);
 }
 
-.diff-text {
-  flex: 1;
+.diff-legend-chip.is-del {
+  background: var(--diff-legend-bg-del);
+  color: var(--diff-legend-fg-del);
 }
 
-.diff-line.is-add {
-  color: var(--el-color-success);
+.diff-legend-chip.is-add {
+  background: var(--diff-legend-bg-add);
+  color: var(--diff-legend-fg-add);
 }
 
-.diff-line.is-del {
-  color: var(--el-color-danger);
-}
-
-.diff-line.is-equal {
+.diff-legend-chip.is-change {
+  background: var(--diff-legend-bg-chg);
   color: var(--el-text-color-regular);
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.diff-truncate-alert {
+  margin-bottom: 10px;
+}
+
+/* GitHub 系配色：浅色底用柔和红绿底 + 深红深绿字；深色底用半透明底 + 高亮前景 */
+.diff-unified-scroll {
+  --diff-legend-bg-del: #ffeef0;
+  --diff-legend-fg-del: #cf222e;
+  --diff-legend-bg-add: #e6ffec;
+  --diff-legend-fg-add: #1a7f37;
+  --diff-legend-bg-chg: #fff8c5;
+  --diff-bg-ctx: transparent;
+  --diff-fg-ctx: var(--el-text-color-primary);
+  --diff-bg-pad: var(--el-fill-color-light);
+  --diff-fg-pad: var(--el-text-color-placeholder);
+  --diff-bg-del: #ffebe9;
+  --diff-fg-del: #a40e26;
+  --diff-border-del: #ff818266;
+  --diff-bg-add: #dafbe1;
+  --diff-fg-add: #116329;
+  --diff-border-add: #4ae16866;
+  --diff-bg-chg-old: #fff5e8;
+  --diff-bg-chg-new: #e8fff0;
+  --diff-fg-chg-old: #9a3412;
+  --diff-fg-chg-new: #116329;
+  --diff-inline-patch-del: rgba(164, 14, 38, 0.26);
+  --diff-inline-patch-add: rgba(17, 99, 41, 0.26);
+
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+html.dark .diff-unified-scroll {
+  --diff-legend-bg-del: rgba(248, 81, 73, 0.22);
+  --diff-legend-fg-del: #ff9492;
+  --diff-legend-bg-add: rgba(46, 160, 67, 0.22);
+  --diff-legend-fg-add: #6fdd96;
+  --diff-legend-bg-chg: rgba(210, 153, 34, 0.18);
+  --diff-bg-ctx: rgba(110, 118, 129, 0.08);
+  --diff-fg-ctx: var(--el-text-color-primary);
+  --diff-bg-pad: rgba(110, 118, 129, 0.12);
+  --diff-fg-pad: var(--el-text-color-placeholder);
+  --diff-bg-del: rgba(248, 81, 73, 0.28);
+  --diff-fg-del: #ff9492;
+  --diff-border-del: rgba(255, 123, 114, 0.45);
+  --diff-bg-add: rgba(46, 160, 67, 0.28);
+  --diff-fg-add: #6fdd96;
+  --diff-border-add: rgba(86, 211, 100, 0.45);
+  --diff-bg-chg-old: rgba(248, 81, 73, 0.2);
+  --diff-bg-chg-new: rgba(46, 160, 67, 0.2);
+  --diff-fg-chg-old: #ff9492;
+  --diff-fg-chg-new: #6fdd96;
+  --diff-inline-patch-del: rgba(255, 148, 146, 0.4);
+  --diff-inline-patch-add: rgba(111, 221, 150, 0.4);
+}
+
+.diff-grid-head {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px minmax(0, 1fr);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  border-bottom: 1px solid var(--el-border-color);
+}
+
+.diff-h-gutter {
+  padding: 6px 4px;
+  text-align: right;
+  border-right: 1px solid var(--el-border-color-lighter);
+}
+
+.diff-h-code {
+  padding: 6px 8px;
+  border-right: 1px solid var(--el-border-color-lighter);
+}
+
+.diff-h-code:last-child {
+  border-right: none;
+}
+
+.diff-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.diff-grid-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px minmax(0, 1fr);
+  align-items: stretch;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
+}
+
+.diff-grid-row:last-child {
+  border-bottom: none;
+}
+
+.diff-gutter {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  text-align: right;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  user-select: none;
+  border-right: 1px solid var(--el-border-color-extra-light);
+  background: var(--el-fill-color-light);
+  white-space: nowrap;
+}
+
+.diff-code {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 1px 6px 1px 0;
+  min-height: calc(1.55em + 4px);
+  border-right: 1px solid var(--el-border-color-extra-light);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.diff-code--new {
+  border-right: none;
+}
+
+.diff-prefix-char {
+  flex: 0 0 14px;
+  text-align: center;
+  font-weight: 700;
+  user-select: none;
+  line-height: inherit;
+}
+
+.diff-code-inner {
+  flex: 1;
+  min-width: 0;
+  min-height: 1.55em;
+}
+
+.diff-code.tone-eq {
+  background: var(--diff-bg-ctx);
+  color: var(--diff-fg-ctx);
+}
+
+.diff-code.tone-eq .diff-prefix-char {
+  color: var(--el-text-color-placeholder);
+}
+
+.diff-code.tone-del {
+  background: var(--diff-bg-del);
+  color: var(--diff-fg-del);
+  border-left: 3px solid var(--diff-border-del);
+  padding-left: 5px;
+}
+
+.diff-code.tone-del .diff-prefix-char {
+  color: var(--diff-fg-del);
+}
+
+.diff-code.tone-add {
+  background: var(--diff-bg-add);
+  color: var(--diff-fg-add);
+  border-left: 3px solid var(--diff-border-add);
+  padding-left: 5px;
+}
+
+.diff-code.tone-add .diff-prefix-char {
+  color: var(--diff-fg-add);
+}
+
+.diff-code.tone-pad {
+  background: var(--diff-bg-pad);
+  color: var(--diff-fg-pad);
+}
+
+.diff-code.tone-pad .diff-prefix-char {
+  color: var(--diff-fg-pad);
+  opacity: 0.5;
+}
+
+.diff-code.tone-chgL {
+  background: var(--diff-bg-chg-old);
+  color: var(--diff-fg-chg-old);
+  border-left: 3px solid var(--diff-border-del);
+  padding-left: 5px;
+}
+
+.diff-code.tone-chgL .diff-prefix-char {
+  color: var(--diff-fg-chg-old);
+}
+
+.diff-code.tone-chgR {
+  background: var(--diff-bg-chg-new);
+  color: var(--diff-fg-chg-new);
+  border-left: 3px solid var(--diff-border-add);
+  padding-left: 5px;
+}
+
+.diff-code.tone-chgR .diff-prefix-char {
+  color: var(--diff-fg-chg-new);
+}
+
+/* 「修改」行：字词/字符级垫色（与整行浅底叠加） */
+.diff-code.tone-chgL .diff-inline--del {
+  background: var(--diff-inline-patch-del);
+  color: var(--diff-fg-chg-old);
+  border-radius: 3px;
+  padding: 0 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.diff-code.tone-chgR .diff-inline--add {
+  background: var(--diff-inline-patch-add);
+  color: var(--diff-fg-chg-new);
+  border-radius: 3px;
+  padding: 0 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 </style>

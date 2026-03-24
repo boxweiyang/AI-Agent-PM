@@ -46,6 +46,8 @@
 | `src/features/workspace/projectLayoutRoutes.ts` | **`/projects/:projectId` 子路由**：默认 Dashboard、`detail`、**`m02/requirements`（列表+详情）**、其余 `m0x/...` 占位 |
 | `src/features/workspace/` | `pages/Home.vue`、`ProjectDashboard.vue`、`ProjectDetail.vue`、`pages/requirements/*`、`ProjectModulePlaceholder.vue`、`components/ProjectCreateDialog.vue`、`components/DashboardEchart.vue` |
 | `src/utils/requirementDocExport.ts` | 需求文档 **导出 MD/HTML** 与 **打印为 PDF**（`marked`） |
+| `src/utils/inlineTextDiff.ts` | 需求文档 AI **差异弹窗**中「修改」行的 **字词/字符级** 片段（`diff`：`diffChars` / `diffWordsWithSpace`） |
+| `diff`（`package.json`） | 行内文本对比（与 `RequirementDocVersionDetailPage` 弹窗配合） |
 | `src/mocks/requirementDocStore.ts` | MSW 内存：**需求文档版本**链（最新判定、预置 `proj-demo-1` 示例） |
 | `src/features/workspace/dashboardChartOptions.ts` | Dashboard **ECharts option** 生成（Mock），由 `buildProjectDashboard` 组装进 `cards[].charts` |
 | `echarts`（`package.json`） | Dashboard 卡片内图表（core 按需注册于 `DashboardEchart.vue`） |

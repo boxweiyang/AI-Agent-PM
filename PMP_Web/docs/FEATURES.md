@@ -51,7 +51,7 @@
 | `/projects/:projectId/dashboard` | 项目 Dashboard | `ProjectLayout` + `ProjectDashboard.vue` | REQ-M08：`GET …/dashboard` + MSW；迭代筛选、指标卡片、风险列表、下钻、AI 摘要抽屉（Mock） |
 | `/projects/:projectId/detail` | 项目详情 | `ProjectLayout` + `ProjectDetail.vue` | M01、可编辑、模块入口 |
 | `/projects/:projectId/m02/requirements` | 需求与文档（版本列表） | `ProjectLayout` + `requirements/RequirementDocListPage.vue` | REQ-M02；`GET/POST/DELETE …/requirement-doc/versions` + MSW；导出 MD/HTML/PDF（打印） |
-| `/projects/:projectId/m02/requirements/versions/:versionId` | 需求文档版本详情 | `ProjectLayout` + `requirements/RequirementDocVersionDetailPage.vue` | Markdown 编辑/预览切换；保存弹窗 **新建版本 / 覆盖**；仅 **最新** 可保存 |
+| `/projects/:projectId/m02/requirements/versions/:versionId` | 需求文档版本详情 | `ProjectLayout` + `requirements/RequirementDocVersionDetailPage.vue` | Markdown 编辑/预览切换；保存弹窗 **新建版本 / 覆盖**；仅 **最新** 可保存；**AI 辅助**：已有正文时 **行级左右对照**（行号对齐、未改/删/增/改 底色 + 图例；超大文档时简化 diff 有提示） |
 | `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02B～M11；`artifacts` 驱动已生成/去生成 |
 
 ---
@@ -120,6 +120,7 @@
 - **契约**：**`contracts/openapi/openapi.yaml` v0.2.9** `…/requirement-doc/versions`；MSW 见 **`handlers.ts`** + **`mocks/requirementDocStore.ts`**（`proj-demo-1` 预置两版示例）。
 - **列表**：表格展示 `version_no`、时间、摘要；**打开** 进详情；**每行导出** MD / HTML / **PDF（新窗口打印为 PDF）**；**删除**（删最新后上一版成为最新）；**导出最新** 下拉；**创建首版** / **基于最新版创建** / **新建空白版本**（`POST` + `mode`）。
 - **详情**：**编辑 / 预览** 切换（`marked` 渲染）；**仅当前「最新」版本** 显示 **保存**；保存前 **`el-dialog`** 选 **新建版本**（`POST` + `markdown` + `based_on_version_id`）或 **覆盖当前版本**（`PATCH`）；历史版本 **只读** 可导出。
+- **AI 辅助**：抽屉内对话与「按现有需求生成文档」；**正文为空** 时生成后直接打字回填；**正文已有** 时在 **`el-dialog` 差异对比** 中 **单行网格：左行号+原版 / 右行号+建议稿**（LCS 行 diff；连续「删块+增块」按行配对为 **修改**；**删除** 仅左有字、**新增** 仅右有字、**未改** 灰白底、**修改** 左浅红系/右浅绿系整行底 + **行内字词/字符级** 片段垫色：`diff` 库 **`diffChars` / `diffWordsWithSpace`**，见 `utils/inlineTextDiff.ts`）；超大文本超过阈值时 **整块删+整块增** 简化对比并 `el-alert` 提示。接受/回退与对话上下文截断逻辑不变。
 - **`artifacts.req_doc`**：未生成时与占位页一致，**一键生成** 后可用上述接口。
 
 ## 6.1.3 项目内模块占位页
@@ -160,6 +161,10 @@
 | 2026-03-23 | **`el-main` 左右留白**：`ProjectLayout` / `WorkbenchLayout` 主区 **`padding: 16px 50px`**（上下 16、左右 50）。 |
 | 2026-03-23 | Dashboard：轮播区 **318px**；图 **`fill` + ResizeObserver** 撑满标题与「点击放大」之间高度（卡片主区两列满宽）。 |
 | 2026-03-23 | **REQ-M02 需求与文档**：版本列表 + 详情编辑/预览；保存弹窗 **新建/覆盖**；仅最新可保存；列表与详情 **导出 MD/HTML/PDF（打印）**；OpenAPI **v0.2.9** + MSW `requirementDocStore`。 |
+| 2026-03-24 | 需求文档 **AI 生成差异对比**：由单行合并 diff 列表改为 **左右两栏**（左当前正文、右建议稿），纵向滚动联动；弹窗宽度 **1100px**。 |
+| 2026-03-24 | 差异弹窗：**行号对齐** + 行背景区分 **未改/删除/新增/修改**（修改=同序「删块+增块」按行配对）；**图例** + 超大文档 **简化 diff** 警告；弹窗 **1180px**。 |
+| 2026-03-24 | 差异弹窗 **Git 风格**：行首 **`−`/`+`**；删除/新增/修改行 **红绿前景色 + 浅色半透明底**（`html.dark` 单独 token）；左侧 **色条** 提示。 |
+| 2026-03-24 | **「修改」行内高亮**：依赖 **`diff`**（`diffChars` / `diffWordsWithSpace`）；`inlineTextDiff.ts` 生成左右片段；超长单行自动用词级 diff 降耗。 |
 
 ---
 
