@@ -64,7 +64,29 @@ import {
   bindApiCatalogEndpointTasks,
   listApiCatalogEndpointsByTask,
   getApiCatalogLatestGenerateResult,
+  applyPlanningTaskProgressToLinkedEndpoints,
 } from '@/mocks/apiCatalogStore'
+import {
+  createPlanningIteration,
+  createPlanningStory,
+  createPlanningTask,
+  deletePlanningIteration,
+  deletePlanningStory,
+  deletePlanningTask,
+  getPlanningIteration,
+  getPlanningStory,
+  getPlanningTask,
+  listPlanningIterations,
+  listPlanningStories,
+  listPlanningTasks,
+  listPlanningTasksByStory,
+  patchPlanningIteration,
+  patchPlanningStory,
+  patchPlanningTask,
+  reorderPlanningIterations,
+  reorderPlanningStories,
+  reorderPlanningTasks,
+} from '@/mocks/planningStore'
 import type {
   ApiCatalogAiGenerateMode,
   ApiCatalogConstraint,
@@ -1648,5 +1670,212 @@ ${message || '（无）'}
     const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
     if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
     return HttpResponse.json({ code: 0, message: 'ok', data: listApiCatalogEndpointsByTask(projectId, taskId) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/iterations', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listPlanningIterations(projectId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/iterations', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { name?: string; goal_summary?: string }
+    if (!body.name || !body.goal_summary) {
+      return HttpResponse.json({ code: 40001, message: 'name 与 goal_summary 必填', data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: createPlanningIteration(projectId, body as never) })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/iterations/reorder', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { ordered_ids?: string[] }
+    if (!Array.isArray(body.ordered_ids)) {
+      return HttpResponse.json({ code: 40001, message: 'ordered_ids 必填', data: null })
+    }
+    reorderPlanningIterations(projectId, { ordered_ids: body.ordered_ids })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/iterations/:iterationId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const row = getPlanningIteration(projectId, iterationId)
+    if (!row) return HttpResponse.json({ code: 40423, message: '迭代不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: row })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/iterations/:iterationId', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const r = patchPlanningIteration(projectId, iterationId, body as never)
+    if (!r.ok) return HttpResponse.json({ code: 40423, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/iterations/:iterationId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const r = deletePlanningIteration(projectId, iterationId)
+    if (!r.ok) return HttpResponse.json({ code: 40423, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/iterations/:iterationId/stories', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listPlanningStories(projectId, iterationId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/iterations/:iterationId/stories', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { title?: string; acceptance_criteria?: string[] }
+    if (!body.title) return HttpResponse.json({ code: 40001, message: 'title 必填', data: null })
+    const r = createPlanningStory(projectId, iterationId, body as never)
+    if (!r.ok) return HttpResponse.json({ code: 40423, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/iterations/:iterationId/stories/reorder', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { ordered_ids?: string[] }
+    if (!Array.isArray(body.ordered_ids)) {
+      return HttpResponse.json({ code: 40001, message: 'ordered_ids 必填', data: null })
+    }
+    reorderPlanningStories(projectId, iterationId, { ordered_ids: body.ordered_ids })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/stories/:storyId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const row = getPlanningStory(projectId, storyId)
+    if (!row) return HttpResponse.json({ code: 40424, message: 'Story 不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: row })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/stories/:storyId', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const r = patchPlanningStory(projectId, storyId, body as never)
+    if (!r.ok) return HttpResponse.json({ code: 40424, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/stories/:storyId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const r = deletePlanningStory(projectId, storyId)
+    if (!r.ok) return HttpResponse.json({ code: 40424, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/stories/:storyId/tasks', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listPlanningTasksByStory(projectId, storyId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/stories/:storyId/tasks', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { title?: string; type_suggestion?: string }
+    if (!body.title || !body.type_suggestion) {
+      return HttpResponse.json({ code: 40001, message: 'title 与 type_suggestion 必填', data: null })
+    }
+    const r = createPlanningTask(projectId, storyId, body as never)
+    if (!r.ok) return HttpResponse.json({ code: 40424, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/stories/:storyId/tasks/reorder', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { ordered_ids?: string[] }
+    if (!Array.isArray(body.ordered_ids)) {
+      return HttpResponse.json({ code: 40001, message: 'ordered_ids 必填', data: null })
+    }
+    reorderPlanningTasks(projectId, storyId, { ordered_ids: body.ordered_ids })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/tasks', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const url = new URL(request.url)
+    const iteration_id = url.searchParams.get('iteration_id') || undefined
+    const story_id = url.searchParams.get('story_id') || undefined
+    const api_endpoint_id = url.searchParams.get('api_endpoint_id') || undefined
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: listPlanningTasks(projectId, { iteration_id, story_id, api_endpoint_id }),
+    })
+  }),
+
+  http.get('/api/v1/projects/:projectId/tasks/:taskId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const row = getPlanningTask(projectId, taskId)
+    if (!row) return HttpResponse.json({ code: 40425, message: 'Task 不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: row })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/tasks/:taskId', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const r = patchPlanningTask(projectId, taskId, body as never)
+    if (!r.ok) return HttpResponse.json({ code: 40425, message: r.message, data: null })
+    applyPlanningTaskProgressToLinkedEndpoints(projectId, r.data)
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/tasks/:taskId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const r = deletePlanningTask(projectId, taskId)
+    if (!r.ok) return HttpResponse.json({ code: 40425, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
   }),
 ]

@@ -17,8 +17,8 @@
 - **MSW Mock 优先**：日常用 **`cd PMP_Web && npm run dev:mock`**；在 **不接 PMP_Service** 的前提下把前端路径做完整。
 - 新能力：**先扩 `contracts/openapi/openapi.yaml`，再补 `PMP_Web/src/mocks/handlers.ts`**；改界面同步 **`PMP_Web/docs/FEATURES.md`** §7。
 - Mock 验收通过后，再 **`dev:api` 联调** 与 Agent。
-- 当前进展：`REQ-M02`、`REQ-M02B`、`REQ-M02C`（Mock）已落地；其中 M02C 已支持接口清单分组/筛选、接口详细说明、Task 绑定、操作三点菜单、通用接口约束版本化文档（Markdown 详情页 + AI 辅助）。
-- 下一步（明日优先级）：先完成 **M04 Task 页面首版** 并与 M02C 做真实双向交互（`api_endpoint_id` 定位、Task↔接口状态回写），完成后从 **数据库结构页（M03）** 开始往下推进。
+- 当前进展：`REQ-M02`、`REQ-M02B`、`REQ-M02C`、`REQ-M03`、`REQ-M04`（Mock）已落地；M03 为迭代→Story→Task 草案；M04 为全项目 Task 列表与状态；接口管理 Task 绑定与 **规划 Task** 同源；Task **已完成** 时 Mock 回写接口三态。
+- 下一步优先级：**M02D 数据库结构页** 与 **REQ-M05 人力池**（对接 `assigned_user_id`）；可选增强 M03 AI 抽屉与拖拽排序、M04 看板拖拽。
 
 **需求与实现依据**
 
@@ -45,3 +45,4 @@
 |------|------|
 | （首版） | 短接续词 + 需求/脚手架已完成清单。 |
 | 2026-03-22 | 与 **HANDOFF** 对齐：**Mock 优先**、复制区浓缩、明确 §6 为当前待办来源。 |
+| 2026-03-25 | M03/M04 已落地；下一步改为 M02D + M05；进展与 HANDOFF §6 对齐。 |

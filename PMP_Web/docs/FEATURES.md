@@ -55,8 +55,10 @@
 | `/projects/:projectId/m02/requirements/modules/:moduleId/versions/:versionId` | 模块细化文档版本详情 | `ProjectLayout` + `requirements/RequirementModuleDocVersionDetailPage.vue` | 与总文档详情能力对齐；**`capability: requirement_module_doc_assist`**；保存后回列表并带 **`?tab=modules`** |
 | `/projects/:projectId/m02b/design` | 技术设计（工作台） | `ProjectLayout` + `design/TechDesignDocListPage.vue` | REQ-M02B；需求弹窗；**技术选型** + **`tech_selection_assist` AI**；`tech_delivery_parts` **PATCH**（**v0.3.2**）；**技术设计文档** 版本列表 |
 | `/projects/:projectId/m02b/design/versions/:versionId` | 技术设计版本详情 | `ProjectLayout` + `design/TechDesignDocVersionDetailPage.vue` | Markdown 编辑/预览；保存 **新建 / 覆盖**；**`capability: tech_design_doc_assist`** |
-| `/projects/:projectId/m02c/apis` | 接口管理 | `ProjectLayout` + `apis/ApiCatalogPage.vue` | REQ-M02C；通用约束管理（含 AI 辅助）；接口清单 AI 生成（全量/增量）；多维分组、筛选搜索、Swagger 风格展开；接口 CRUD；Task 绑定（Mock） |
-| `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ-M02C～M11（除已落地路径）；`artifacts` 驱动已生成/去生成 |
+| `/projects/:projectId/m02c/apis` | 接口管理 | `ProjectLayout` + `apis/ApiCatalogPage.vue` | REQ-M02C；通用约束管理（含 AI 辅助）；接口清单 AI 生成（全量/增量）；多维分组、筛选搜索、Swagger 风格展开；接口 CRUD；Task 绑定（与 M03 Task 同源） |
+| `/projects/:projectId/m03/iterations` | 迭代与 Story | `ProjectLayout` + `iterations/IterationPlanningPage.vue` | REQ-M03；迭代 → Story → Task 草案；列表 CRUD；契约 **v0.3.3** `planning`；MSW **`planningStore.ts`** |
+| `/projects/:projectId/m04/tasks` | Task 与执行 | `ProjectLayout` + `tasks/TasksExecutionPage.vue` | REQ-M04；`GET …/tasks` 列表；状态流转；`api_endpoint_id` 筛选；Task **已完成** 时 Mock 回写 M02C 接口三态 |
+| `/projects/:projectId/<其它模块路径>` | 各模块占位 | `ProjectLayout` + `ProjectModulePlaceholder.vue` | REQ 模块中除已列路径外；`artifacts` 驱动已生成/去生成 |
 
 ---
 
@@ -129,16 +131,15 @@
 
 ## 6.1.3 `/projects/:projectId/m02b/design` 技术设计（REQ-M02B，V1）
 
-- **布局（自上而下）**：① **需求对照**：**查看最新版需求文档**（弹窗 Markdown 预览，可 **下载 MD/HTML/PDF**）；未生成 **`artifacts.req_doc`** 时按钮禁用。② **技术选型**：**AI 辅助选型**（`tech_selection_assist`，先对话再 **根据对话生成技术选型并预览**）→ **`DiffDialog`** 对比表单与建议 → **接受** 填入；**确定保存** → **`PATCH /api/v1/projects/{id}`** 的 **`tech_delivery_parts`（整表替换）**（**v0.3.2** `TechDeliveryPart` + invoke 说明）。③ **技术设计文档**：**`artifacts.tech_design`** 未生成时 **一键生成（演示）**；已生成则 **版本列表**（与需求总文档列表同构：两版 **`DiffDialog` 只读**、导出、创建/删除、打开详情）。
+- **布局（自上而下）**：① **需求对照**：公共组件 **`RequirementCompareCard`** — **查看最新版需求文档**（弹窗 Markdown 预览，可 **下载 MD/HTML/PDF**）；未生成 **`artifacts.req_doc`** 时按钮禁用（由父组件传入就绪态，避免重复请求项目）；未就绪时提示后提供 **「前往创建」** 链至 **需求与文档**。② **技术选型**：**AI 辅助选型**（`tech_selection_assist`，先对话再 **根据对话生成技术选型并预览**）→ **`DiffDialog`** 对比表单与建议 → **接受** 填入；**确定保存** → **`PATCH /api/v1/projects/{id}`** 的 **`tech_delivery_parts`（整表替换）**（**v0.3.2** `TechDeliveryPart` + invoke 说明）。③ **技术设计文档**：**`artifacts.tech_design`** 未生成时 **一键生成（演示）**；已生成则 **版本列表**（与需求总文档列表同构：两版 **`DiffDialog` 只读**、导出、创建/删除、打开详情）。
 - **技术文档契约**：**`GET/POST/PATCH/DELETE …/tech-design-doc/versions`**（**v0.3.1** 起，`tech-design-doc` tag），字段与 **`…/requirement-doc/versions`** 相同。MSW：**`techDesignDocStore.ts`** + **`handlers.ts`**；**`proj-demo-1`** 预置技术选型两行 + 技术文档两版。
 - **详情页**：**`tech_design_doc_assist`**；保存后回列表。
 
 ## 6.1.4 项目内模块占位页
 
-- **路径**：`/projects/:projectId/<模块路径>`（如 `m02c/apis`）；**`m02/requirements` 与 `m02b/design` 已接真实页，不在此列**。
+- **路径**：`/projects/:projectId/<模块路径>`；**需求 / 技术设计 / 接口管理 / 迭代与 Story / Task 与执行** 已接真实页，不在此列。
 - **已生成**（`artifacts[键]===true`）：成功态说明，后续可替换为真实工作台。
 - **未生成**：**一键生成（演示）** 调用 **PATCH** 合并 `artifacts`，再可进入已生成态；**返回项目详情** 回到概览。
-- **Task 占位联动**：当访问 `project-m04-tasks` 且携带查询参数 **`api_endpoint_id`**（来自接口管理「去 Task 页面」），占位页会展示联动提示，并提供 **「回到接口管理」** 按钮，避免跨模块联动信息丢失。
 
 ## 6.1.5 `/projects/:projectId/m02c/apis` 接口管理（REQ-M02C，V1）
 
@@ -147,13 +148,25 @@
 - **多维分组与筛选**：分组支持 **需求模块 / 交付部分 / 公共功能**；支持状态筛选与关键字搜索。
 - **Swagger 风格展示**：列表支持展开查看 **请求参数（path/query/header/body）**、**成功返回参数**、**错误返回参数**。
 - **接口 CRUD**：可新增/编辑/删除接口；编辑器以参数表格化维护，不依赖手写 JSON。
-- **Task 绑定（Mock）**：每条接口可多选绑定 Task，列表显示绑定数量，展开区显示已绑定 Task 标题；支持跳转到 Task 模块并携带 `api_endpoint_id` 占位参数。
+- **Task 绑定**：每条接口可多选绑定 **M03 规划 Task**（`GET …/api-catalog/tasks` 与 **`planningStore` 任务列表同源**）；列表显示绑定数量与展开区标题；跳转 Task 页携带 **`api_endpoint_id`** 筛选关联任务；绑定会同步写入 Task 的 **`linked_endpoint_ids`**（Mock）。
+
+## 6.1.6 `/projects/:projectId/m03/iterations` 迭代与 Story（REQ-M03）
+
+- **数据**：**`GET/PATCH/DELETE …/iterations`**、**`…/iterations/{id}/stories`**、**`…/stories/{id}`**、**`…/stories/{id}/tasks`**、**`…/tasks/{id}`**（契约 **v0.3.3**，tag **`planning`**）；MSW **`planningStore.ts`** + **`handlers.ts`**。
+- **页首**：与技术设计页一致，**先 `GET /projects/:id`**，将 **`artifacts.req_doc`** 以 **`req-doc-ready`** 传入 **`RequirementCompareCard`**；未就绪时提示后有 **「前往创建」** 跳转 **需求与文档**。
+- **交互**：自上而下三张表——**迭代** → 选中后 **Story** → 选中后 **Task 草案**；支持新建/编辑/删除；Task 含类型建议、执行状态、关联接口数量（接口在 M02C 绑定）。
+- **演示数据**：**`proj-demo-1`** 预置多迭代与 Story/Task；其它项目为最小一条链。
+
+## 6.1.7 `/projects/:projectId/m04/tasks` Task 与执行（REQ-M04）
+
+- **数据**：**`GET …/tasks`**（可选 **`iteration_id` / `story_id` / `api_endpoint_id`**）；**`PATCH …/tasks/{taskId}`** 更新状态等。
+- **交互**：全项目 Task 表；迭代/Story 列由客户端拉取迭代与 Story 列表拼出名称；状态列下拉即改；**`api_endpoint_id`** 查询参数时仅展示绑定该接口的 Task，并提示来自接口管理。
+- **与 M02C**：Task 状态为 **已完成** 时，Mock 按 **类型建议**（前端/后端/测试等）将进度写入已绑定接口的 **`fe_status` / `be_status` / `qa_status`**（见 **`applyPlanningTaskProgressToLinkedEndpoints`**）。
 
 ## 6.2 跨模块联动待开发标注（避免遗漏）
 
-- **M02C → M04 已预留**：接口管理已把 `api_endpoint_id` 传给 Task 页面；当前 Task 页面仍为占位，后续接入真实 M04 时需先消费该参数并高亮对应接口/任务关系。
-- **Task 状态回写接口状态**：当前 M02C 仅展示三条并行状态标签（前端/后端/测试）；后续 M04 实现后需把任务完成态映射回接口状态字段。
-- **反向查询接口已预留（Mock）**：`GET /api/v1/projects/{projectId}/api-catalog/tasks/{taskId}/endpoints`；后续 M04 页面可直接用此接口渲染“任务关联接口”。
+- **反向查询（Mock 已具备）**：`GET /api/v1/projects/{projectId}/api-catalog/tasks/{taskId}/endpoints`；若需在 Task 详情中展示「关联接口」列表，可直接消费。
+- **人力池（REQ-M05）**：Task 上 **`assigned_user_id`** 字段已预留，待人力池模块接入后再接选择器。
 
 ## 6.3 `/enter-last-project` 进入最近项目
 
@@ -199,6 +212,10 @@
 | 2026-03-24 | **技术设计工作台**：需求**最新版弹窗**+下载；**`tech_delivery_parts` 技术选型**（**v0.3.2** `TechDeliveryPart`，PATCH 整表替换）；列表页三段布局；**`techDeliveryPartKinds.ts`**。 |
 | 2026-03-24 | **技术选型 AI**：**`tech_selection_assist`** + **`AiAssistDrawer`** `assistKind=tech_selection`；**`techDeliveryPartsNormalize.ts`**（规范化与 diff 文本）；MSW **`generate_tech_selection`**。 |
 | 2026-03-24 | **REQ-M02C 接口管理（V1）**：`ApiCatalogPage` 上线；通用约束+AI、接口清单 AI（全量/增量）、多维分组与筛选、Swagger 风格展开、接口 CRUD、Task 绑定（Mock）与跨模块占位联动标注。 |
+| 2026-03-25 | **REQ-M03 / REQ-M04**：OpenAPI **v0.3.3** 迭代·Story·Task；**`planningStore`** + MSW；**`IterationPlanningPage`**、**`TasksExecutionPage`**；接口管理 Task 列表与规划 Task 同源；绑定同步 **`linked_endpoint_ids`**；Task **已完成** 回写接口三态（Mock）。 |
+| 2026-03-25 | **需求对照组件**：抽离 **`RequirementCompareCard`**（`components/RequirementCompareCard`）；`TechDesignDocListPage` 与 **`IterationPlanningPage`** 页首复用。 |
+| 2026-03-25 | **需求对照**：迭代页与技术设计一致，**`GET /projects/:id`** 后传 **`req-doc-ready`**；未就绪时提示后增加 **「前往创建」** 链至 **`project-m02-requirements`**。 |
+| 2026-03-25 | **需求对照**：按钮启用条件 = **`artifacts.req_doc`** 且 **`GET …/requirement-doc/versions`** 仍存在 **`latest_version_id` 或非空 `items`**（删光版本后与无文档一致，禁用按钮）。 |
 
 ---
 

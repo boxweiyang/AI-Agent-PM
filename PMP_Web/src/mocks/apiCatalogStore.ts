@@ -6,8 +6,9 @@ import type {
   ApiCatalogParam,
   ApiCatalogResponseField,
   ApiHttpMethod,
-  ApiCatalogTaskSummary,
+  PlanningTask,
 } from '@/types/api-contract'
+import { listPlanningTaskSummaries, syncTasksLinkedEndpointsForBinding } from '@/mocks/planningStore'
 
 type ConstraintVersionRow = ApiCatalogConstraint & {
   version_no: number
@@ -17,7 +18,6 @@ type ConstraintVersionRow = ApiCatalogConstraint & {
 type ApiCatalogProjectState = {
   constraint_versions: ConstraintVersionRow[]
   endpoints: ApiCatalogEndpoint[]
-  tasks: ApiCatalogTaskSummary[]
   latest_generate_result: {
     mode: ApiCatalogAiGenerateMode
     added: number
@@ -73,11 +73,6 @@ function state(projectId: string): ApiCatalogProjectState {
     byProject.set(projectId, {
       constraint_versions: [],
       endpoints: [],
-      tasks: [
-        { id: 'task-mock-1', title: '实现项目接口列表查询' },
-        { id: 'task-mock-2', title: '完成新增接口定义后端接口' },
-        { id: 'task-mock-3', title: '补齐接口管理联调测试用例' },
-      ],
       latest_generate_result: null,
     })
   }
@@ -507,7 +502,7 @@ export function aiGenerateApiCatalogEndpoints(projectId: string, mode: ApiCatalo
 }
 
 export function listApiCatalogTasks(projectId: string) {
-  return { items: [...state(projectId).tasks] }
+  return listPlanningTaskSummaries(projectId)
 }
 
 export function listApiCatalogEndpointsByTask(projectId: string, taskId: string) {
@@ -521,12 +516,34 @@ export function bindApiCatalogEndpointTasks(projectId: string, endpointId: strin
   const s = state(projectId)
   const row = s.endpoints.find((x) => x.id === endpointId)
   if (!row) return { ok: false as const, message: '接口不存在' }
-  const taskSet = new Set(s.tasks.map((t) => t.id))
+  const taskSet = new Set(listPlanningTaskSummaries(projectId).items.map((t) => t.id))
   row.bound_task_ids = taskIds.filter((id) => taskSet.has(id))
   row.updated_at = nowIso()
+  syncTasksLinkedEndpointsForBinding(projectId, endpointId, row.bound_task_ids)
   return { ok: true as const, data: row }
 }
 
 export function getApiCatalogLatestGenerateResult(projectId: string) {
   return state(projectId).latest_generate_result
+}
+
+/** Task 完成时，将进度反映到已绑定接口的三条并行状态（Mock 规则） */
+export function applyPlanningTaskProgressToLinkedEndpoints(projectId: string, task: PlanningTask) {
+  if (task.status !== 'done') return
+  const ids = task.linked_endpoint_ids || []
+  if (ids.length === 0) return
+  const s = state(projectId)
+  for (const eid of ids) {
+    const ep = s.endpoints.find((x) => x.id === eid)
+    if (!ep) continue
+    const t = task.type_suggestion
+    if (t === 'frontend') ep.fe_status = 'done'
+    if (t === 'backend' || t === 'devops') ep.be_status = 'done'
+    if (t === 'qa') ep.qa_status = 'done'
+    if (t === 'other') {
+      ep.fe_status = 'done'
+      ep.be_status = 'done'
+    }
+    ep.updated_at = nowIso()
+  }
 }

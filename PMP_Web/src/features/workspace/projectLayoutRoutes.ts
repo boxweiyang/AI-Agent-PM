@@ -3,7 +3,13 @@ import type { RouteRecordRaw } from 'vue-router'
 import { PROJECT_RELATED_MODULES } from '@/config/projectRelatedModules'
 
 /** 已接真实页面的模块路由名（其余走占位页） */
-const IMPLEMENTED_PROJECT_MODULE_NAMES = new Set(['project-m02-requirements', 'project-m02b-design', 'project-m02c-apis'])
+const IMPLEMENTED_PROJECT_MODULE_NAMES = new Set([
+  'project-m02-requirements',
+  'project-m02b-design',
+  'project-m02c-apis',
+  'project-m03-iterations',
+  'project-m04-tasks',
+])
 
 const PLACEHOLDER_MODULES = PROJECT_RELATED_MODULES.filter((m) => !IMPLEMENTED_PROJECT_MODULE_NAMES.has(m.name))
 
@@ -79,6 +85,18 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     name: 'project-m02c-apis',
     component: () => import('./pages/apis/ApiCatalogPage.vue'),
     meta: { title: '接口管理', artifactKey: 'api_catalog', reqRef: 'REQ-M02C' },
+  },
+  {
+    path: 'm03/iterations',
+    name: 'project-m03-iterations',
+    component: () => import('./pages/iterations/IterationPlanningPage.vue'),
+    meta: { title: '迭代与 Story', artifactKey: 'iteration_board', reqRef: 'REQ-M03' },
+  },
+  {
+    path: 'm04/tasks',
+    name: 'project-m04-tasks',
+    component: () => import('./pages/tasks/TasksExecutionPage.vue'),
+    meta: { title: 'Task 与执行', artifactKey: 'task_board', reqRef: 'REQ-M04' },
   },
   ...projectModuleChildren,
 ]

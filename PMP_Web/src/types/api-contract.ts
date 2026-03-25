@@ -358,6 +358,126 @@ export type ApiCatalogTaskSummary = {
   title: string
 }
 
+/** REQ-M03 / REQ-M04：迭代、Story、Task */
+export type PlanningPriority = 0 | 1 | 2 | 3 | 4
+
+export type PlanningIteration = {
+  id: string
+  name: string
+  goal_summary: string
+  planned_start_at: string | null
+  planned_end_at: string | null
+  scope_notes: string
+  sort_order: number
+  priority: PlanningPriority | null
+  created_at: string
+  updated_at: string
+}
+
+export type PlanningIterationCreateBody = {
+  name: string
+  goal_summary: string
+  planned_start_at?: string | null
+  planned_end_at?: string | null
+  scope_notes?: string
+  priority?: PlanningPriority
+}
+
+export type PlanningIterationPatchBody = Partial<
+  Pick<
+    PlanningIteration,
+    'name' | 'goal_summary' | 'planned_start_at' | 'planned_end_at' | 'scope_notes' | 'sort_order' | 'priority'
+  >
+>
+
+export type PlanningIterationListData = {
+  items: PlanningIteration[]
+}
+
+export type PlanningReorderBody = {
+  ordered_ids: string[]
+}
+
+export type PlanningStory = {
+  id: string
+  iteration_id: string
+  title: string
+  acceptance_criteria: string[]
+  requirement_ref: string
+  priority: PlanningPriority
+  sort_order: number
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export type PlanningStoryCreateBody = {
+  title: string
+  acceptance_criteria: string[]
+  requirement_ref?: string
+  priority?: PlanningPriority
+  notes?: string
+}
+
+export type PlanningStoryPatchBody = Partial<
+  Pick<
+    PlanningStory,
+    'title' | 'acceptance_criteria' | 'requirement_ref' | 'priority' | 'sort_order' | 'notes'
+  >
+>
+
+export type PlanningStoryListData = {
+  items: PlanningStory[]
+}
+
+export type PlanningTaskTypeSuggestion = 'frontend' | 'backend' | 'qa' | 'devops' | 'other'
+
+export type PlanningTaskStatus = 'todo' | 'in_progress' | 'testing' | 'done'
+
+export type PlanningTask = {
+  id: string
+  story_id: string
+  iteration_id: string
+  title: string
+  description: string
+  type_suggestion: PlanningTaskTypeSuggestion
+  priority: PlanningPriority
+  sort_order: number
+  status: PlanningTaskStatus
+  assigned_user_id: string | null
+  linked_endpoint_ids: string[]
+  ai_batch_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PlanningTaskCreateBody = {
+  title: string
+  description?: string
+  type_suggestion: PlanningTaskTypeSuggestion
+  priority?: PlanningPriority
+  linked_endpoint_ids?: string[]
+}
+
+export type PlanningTaskPatchBody = Partial<
+  Pick<
+    PlanningTask,
+    | 'title'
+    | 'description'
+    | 'type_suggestion'
+    | 'priority'
+    | 'sort_order'
+    | 'status'
+    | 'assigned_user_id'
+    | 'linked_endpoint_ids'
+    | 'ai_batch_id'
+  >
+>
+
+export type PlanningTaskListData = {
+  items: PlanningTask[]
+}
+
 /** GET …/requirement-doc/modules */
 export type RequirementDocModuleSummary = {
   id: string

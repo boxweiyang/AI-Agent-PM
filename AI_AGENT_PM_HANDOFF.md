@@ -75,8 +75,10 @@
 - **工作台 / 项目列表**：`Home.vue`；卡片进项目 → **`project-dashboard`**；新建同理。
 - **项目详情**：`ProjectDetail.vue`；PATCH；**技术栈** 四类 **`TechStackMultiSelect`** + `techStackOptions.ts`（存库仍为字符串、`、` 拼接）。
 - **Dashboard（REQ-M08）**：`GET …/dashboard` + `ProjectDashboard.vue`（**一行两列**卡片、每卡 **双 ECharts**、**点击图弹窗放大**、「查看」下钻）；**完成预测** + **计划与里程碑**（散点+柱线）；MSW `buildProjectDashboard.ts` + `dashboardChartOptions.ts`；依赖 **`echarts`**。
-- **模块占位**：`artifacts` + `ProjectModulePlaceholder` 演示 PATCH。
+- **模块占位**：`artifacts` + `ProjectModulePlaceholder` 演示 PATCH（**M03/M04 等已接真实页的路由已排除占位**）。
 - **REQ-M02 需求与文档**：版本列表/详情（单版本 Markdown 编辑/预览）、导出（MD/HTML/PDF）+ AI 辅助（diff MVP、对话长期记忆与接受/回退后上下文截断）。
+- **REQ-M03**：**`IterationPlanningPage.vue`** — 迭代 → Story → Task 草案；MSW **`planningStore.ts`**；契约 **v0.3.3** `planning`。
+- **REQ-M04**：**`TasksExecutionPage.vue`** — `GET …/tasks`、状态 PATCH；与 M02C 绑定同源 Task；**已完成** 时 Mock 回写接口 **`fe_status`/`be_status`/`qa_status`**。
 - **设置页**：占位 + REQ-M11 说明（AI 页）。
 - **MSW**：`PMP_Web/src/mocks/handlers.ts` 与 OpenAPI 对齐。
 
@@ -91,7 +93,7 @@
 
 | 项 | 说明 |
 |----|------|
-| **M02～M11 真实工作台** | `REQ-M02`、`REQ-M02B`、`REQ-M02C` 已落地前端工作台（M02C 为 Mock 驱动）；**M03～M11 其余仍为占位**（无真实看板/文档业务） |
+| **M02～M11 真实工作台** | `REQ-M02`、`REQ-M02B`、`REQ-M02C`、`REQ-M03`、`REQ-M04` 已落地前端工作台（Mock）；**M05～M11 除已列外** 仍为占位 |
 | **REQ-M08 项目内 Dashboard** | **Mock 页已落地**（卡片/风险/筛选/下钻）；与 M03～M07 **真实同源数据**仍待后端；AI 摘要为 invoke Mock |
 | **设置页** | 个人/系统/AI 配置 **尚无真库持久化**；Mock 阶段可用 **MSW + 内存/或 localStorage** 模拟保存 |
 | **PMP_Service 项目 API** | **本阶段不阻塞前端**；真后端对齐契约为 Mock 闭环之后的工作 |
@@ -106,12 +108,9 @@
 
 > **原则**：不接真后端也能在浏览器里 **完整点通产品路径**；缺接口就 **YAML + MSW** 先定形状。
 
-1. **优先完成 M04 Task 页面（首版可用）**：将 `project-m04-tasks` 从占位升级为真实页面，先打通与 M02C 的双向交互。  
-   - 消费 `api_endpoint_id` 查询参数（来自 M02C），实现任务列表高亮/筛选与回跳定位。  
-   - 接入已存在 Mock 契约：`GET /api/v1/projects/{projectId}/api-catalog/tasks`、`GET /api/v1/projects/{projectId}/api-catalog/tasks/{taskId}/endpoints`、`PUT /api/v1/projects/{projectId}/api-catalog/endpoints/{endpointId}/task-bindings`。  
-   - 完成 **Task ↔ 接口状态回写**：把 Task 完成态映射到接口三条并行状态（前端/后端/测试），并确保 M02C 页面刷新后可见。  
-2. **完成后从数据库结构页开始向下推进（M03 起）**：按 `PMP_Req_V2` 逐模块把占位页替换为可交互页面；新增行为继续保持「先 YAML、再 handlers、再页面」。
-3. ~~**`ProjectDashboard`（M08）**~~：**已完成（Mock）** — `GET …/dashboard` + 页面；后续与真服务对齐即可。  
+1. **数据库结构（M02D）与后续 REQ 竖切**：按 `PMP_Req_V2` 将 **`m02d/...`** 等占位页替换为可交互页面；保持「先 **`openapi.yaml`**、再 **`handlers`**、再页面」。  
+2. **REQ-M05 人力池**：与 M04 Task 的 **`assigned_user_id`**、分配视图对接（Mock 先行）。  
+3. **M03/M04 增强（可选）**：迭代与 Story 的 **AI 抽屉**、**拖拽排序** 持久化；Task **看板拖拽**；与真后端对齐时替换 MSW。  
 4. **设置三页**：AI / 个人 / 系统在 Mock 下 **可保存、可刷新仍生效**（推荐 **localStorage** 或 MSW **sessionStorage 式**内存，与后续真 API 字段对齐时再切换数据源）。  
 5. **契约同步**：每增加 Mock 行为，更新 **`openapi.yaml`**（含 request/response schema），避免与真后端对接时再大改。  
 6. **体验与工程（穿插）**：项目改名后 **顶栏项目名同步**；可选 **`openapi-typescript`** 生成类型，减轻 `api-contract.ts` 手写负担。  
@@ -131,6 +130,7 @@
 | `PMP_Web/src/components/AppHeaderBar/` | 顶栏（见目录内 README；组件均为 **`组件名/` + index.ts**） |
 | `PMP_Web/docs/FEATURES.md` | **用户可见功能真相来源** |
 | `PMP_Web/docs/STRUCTURE.md` | 目录与约定 |
+| `PMP_Web/src/mocks/planningStore.ts` | REQ-M03/M04：迭代、Story、Task（MSW 内存） |
 
 ---
 
@@ -156,6 +156,7 @@
 | 2026-03-24 | **REQ-M02C**：接口管理页（Mock）上线；已预留与 M04 的 `api_endpoint_id` 跨模块联动与 Task-接口反查接口，后续开发 M04 时务必先接入。 |
 | 2026-03-24 | **M02C 交互增强**：接口明细支持详细说明；操作栏改为三点下拉；通用接口约束升级为版本化文档流（列表/对比/打开详情），详情页采用 Markdown 编辑 + AI 辅助；且“AI 生成接口清单”仅在约束版本为 0 时自动生成首版约束。 |
 | 2026-03-24 | **下一步优先级更新**：明日先完成 M04 Task 页面并与接口管理真实打通，再从数据库结构页（M03）开始向下做。 |
+| 2026-03-25 | **REQ-M03/M04 落地**：`planning` 契约 **v0.3.3**；`planningStore` + MSW；`IterationPlanningPage` / `TasksExecutionPage`；`apiCatalogStore` Task 列表与规划 Task 同源；绑定同步 `linked_endpoint_ids`；Task 完成态 Mock 回写接口三态；§6 下一步改为 **M02D / M05** 优先。 |
 
 ---
 

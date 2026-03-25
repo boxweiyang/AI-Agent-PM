@@ -5,7 +5,7 @@ info:
     前后端共用契约草案（**contracts/**）。响应包络见 TECH-004：`{ code, message, data }`，成功时 `code === 0`。
 
     **鉴权（V1）**：账号密码登录；Access JWT（Bearer）；Refresh 见 TECH-004（实现可选 Cookie HttpOnly；契约中 Body 字段保留作备选）。
-  version: 0.3.2-draft
+  version: 0.3.3-draft
 
 servers:
   - url: http://127.0.0.1:8000
@@ -26,6 +26,9 @@ tags:
   - name: tech-design-doc
     description: |
       REQ-M02B **总技术文档** Markdown 版本链（与需求总文档字段形态一致；L2 分模块设计可后续扩展独立资源）。
+  - name: planning
+    description: |
+      REQ-M03 迭代、Story、Task（草案）；REQ-M04 在同一 Task 资源上扩展执行态（状态、负责人等）。
 
 paths:
   /api/v1/health:
@@ -1538,6 +1541,476 @@ paths:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
 
+  /api/v1/projects/{projectId}/iterations:
+    get:
+      tags: [planning]
+      summary: 迭代列表（REQ-M03）
+      operationId: listPlanningIterations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningIterationList"
+    post:
+      tags: [planning]
+      summary: 新建迭代
+      operationId: createPlanningIteration
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningIterationCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningIteration"
+
+  /api/v1/projects/{projectId}/iterations/reorder:
+    patch:
+      tags: [planning]
+      summary: 批量调整迭代排序
+      operationId: reorderPlanningIterations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningReorderBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/iterations/{iterationId}:
+    get:
+      tags: [planning]
+      summary: 迭代详情
+      operationId: getPlanningIteration
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningIteration"
+    patch:
+      tags: [planning]
+      summary: 更新迭代
+      operationId: patchPlanningIteration
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningIterationPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningIteration"
+    delete:
+      tags: [planning]
+      summary: 删除迭代（级联 Story/Task 由实现决定；Mock 为级联删除）
+      operationId: deletePlanningIteration
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/iterations/{iterationId}/stories:
+    get:
+      tags: [planning]
+      summary: 某迭代下 Story 列表
+      operationId: listPlanningStories
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningStoryList"
+    post:
+      tags: [planning]
+      summary: 在某迭代下新建 Story
+      operationId: createPlanningStory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningStoryCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningStory"
+
+  /api/v1/projects/{projectId}/iterations/{iterationId}/stories/reorder:
+    patch:
+      tags: [planning]
+      summary: 批量调整某迭代内 Story 排序
+      operationId: reorderPlanningStories
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningReorderBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/stories/{storyId}:
+    get:
+      tags: [planning]
+      summary: Story 详情
+      operationId: getPlanningStory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningStory"
+    patch:
+      tags: [planning]
+      summary: 更新 Story
+      operationId: patchPlanningStory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningStoryPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningStory"
+    delete:
+      tags: [planning]
+      summary: 删除 Story（级联 Task）
+      operationId: deletePlanningStory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/stories/{storyId}/tasks:
+    get:
+      tags: [planning]
+      summary: 某 Story 下 Task 列表
+      operationId: listPlanningTasksByStory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskList"
+    post:
+      tags: [planning]
+      summary: 在某 Story 下新建 Task
+      operationId: createPlanningTask
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningTaskCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTask"
+
+  /api/v1/projects/{projectId}/stories/{storyId}/tasks/reorder:
+    patch:
+      tags: [planning]
+      summary: 批量调整某 Story 下 Task 排序
+      operationId: reorderPlanningTasks
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningReorderBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/tasks:
+    get:
+      tags: [planning]
+      summary: 项目 Task 列表（可按迭代、Story 过滤；供 M04 看板）
+      operationId: listPlanningTasks
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iteration_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: story_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: api_endpoint_id
+          in: query
+          required: false
+          schema: { type: string }
+          description: 筛选「绑定到某接口」的 Task（用于 M02C 跳转）
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskList"
+
+  /api/v1/projects/{projectId}/tasks/{taskId}:
+    get:
+      tags: [planning]
+      summary: Task 详情
+      operationId: getPlanningTask
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTask"
+    patch:
+      tags: [planning]
+      summary: 更新 Task（含执行态与 M02C 关联）
+      operationId: patchPlanningTask
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningTaskPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTask"
+    delete:
+      tags: [planning]
+      summary: 删除 Task
+      operationId: deletePlanningTask
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2612,3 +3085,236 @@ components:
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ApiCatalogAiGenerateResultData" }
+
+    PlanningPriority:
+      type: integer
+      minimum: 0
+      maximum: 4
+      description: 0 最高；REQ-M03 冻结
+
+    PlanningIteration:
+      type: object
+      required:
+        [id, name, goal_summary, sort_order, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        goal_summary: { type: string }
+        planned_start_at: { type: string, format: date-time, nullable: true }
+        planned_end_at: { type: string, format: date-time, nullable: true }
+        scope_notes: { type: string, description: 关联需求模块、交付物等说明 }
+        sort_order: { type: integer }
+        priority:
+          allOf:
+            - $ref: "#/components/schemas/PlanningPriority"
+          nullable: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PlanningIterationCreateBody:
+      type: object
+      required: [name, goal_summary]
+      properties:
+        name: { type: string }
+        goal_summary: { type: string }
+        planned_start_at: { type: string, format: date-time, nullable: true }
+        planned_end_at: { type: string, format: date-time, nullable: true }
+        scope_notes: { type: string }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+
+    PlanningIterationPatchBody:
+      type: object
+      properties:
+        name: { type: string }
+        goal_summary: { type: string }
+        planned_start_at: { type: string, format: date-time, nullable: true }
+        planned_end_at: { type: string, format: date-time, nullable: true }
+        scope_notes: { type: string }
+        sort_order: { type: integer }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+
+    PlanningIterationListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningIteration" }
+
+    EnvelopePlanningIteration:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningIteration" }
+
+    EnvelopePlanningIterationList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningIterationListData" }
+
+    PlanningReorderBody:
+      type: object
+      required: [ordered_ids]
+      properties:
+        ordered_ids:
+          type: array
+          items: { type: string }
+
+    PlanningStory:
+      type: object
+      required:
+        [id, iteration_id, title, acceptance_criteria, priority, sort_order, created_at, updated_at]
+      properties:
+        id: { type: string }
+        iteration_id: { type: string }
+        title: { type: string }
+        acceptance_criteria:
+          type: array
+          items: { type: string }
+        requirement_ref: { type: string, description: 关联需求模块或锚点 }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        sort_order: { type: integer }
+        notes: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PlanningStoryCreateBody:
+      type: object
+      required: [title, acceptance_criteria]
+      properties:
+        title: { type: string }
+        acceptance_criteria:
+          type: array
+          items: { type: string }
+        requirement_ref: { type: string }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        notes: { type: string }
+
+    PlanningStoryPatchBody:
+      type: object
+      properties:
+        title: { type: string }
+        acceptance_criteria:
+          type: array
+          items: { type: string }
+        requirement_ref: { type: string }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        sort_order: { type: integer }
+        notes: { type: string }
+
+    PlanningStoryListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningStory" }
+
+    EnvelopePlanningStory:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningStory" }
+
+    EnvelopePlanningStoryList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningStoryListData" }
+
+    PlanningTaskTypeSuggestion:
+      type: string
+      enum: [frontend, backend, qa, devops, other]
+
+    PlanningTaskStatus:
+      type: string
+      description: REQ-M04 看板列（V1 四列）
+      enum: [todo, in_progress, testing, done]
+
+    PlanningTask:
+      type: object
+      required:
+        [
+          id,
+          story_id,
+          iteration_id,
+          title,
+          type_suggestion,
+          priority,
+          sort_order,
+          status,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string }
+        story_id: { type: string }
+        iteration_id: { type: string, description: 冗余字段，便于列表查询 }
+        title: { type: string }
+        description: { type: string }
+        type_suggestion: { $ref: "#/components/schemas/PlanningTaskTypeSuggestion" }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        sort_order: { type: integer }
+        status: { $ref: "#/components/schemas/PlanningTaskStatus" }
+        assigned_user_id: { type: string, nullable: true, description: REQ-M05 人力池用户 id }
+        linked_endpoint_ids:
+          type: array
+          items: { type: string }
+          description: 关联 M02C 接口 endpoint id
+        ai_batch_id: { type: string, nullable: true, description: 预留 AI 生成批次 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PlanningTaskCreateBody:
+      type: object
+      required: [title, type_suggestion]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        type_suggestion: { $ref: "#/components/schemas/PlanningTaskTypeSuggestion" }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        linked_endpoint_ids:
+          type: array
+          items: { type: string }
+
+    PlanningTaskPatchBody:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        type_suggestion: { $ref: "#/components/schemas/PlanningTaskTypeSuggestion" }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        sort_order: { type: integer }
+        status: { $ref: "#/components/schemas/PlanningTaskStatus" }
+        assigned_user_id: { type: string, nullable: true }
+        linked_endpoint_ids:
+          type: array
+          items: { type: string }
+        ai_batch_id: { type: string, nullable: true }
+
+    PlanningTaskListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningTask" }
+
+    EnvelopePlanningTask:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTask" }
+
+    EnvelopePlanningTaskList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTaskListData" }

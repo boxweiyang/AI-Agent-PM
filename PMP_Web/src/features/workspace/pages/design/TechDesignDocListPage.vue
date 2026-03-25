@@ -29,18 +29,7 @@
 
       <div class="tdoc-stack">
         <!-- 1. 需求对照 -->
-        <el-card shadow="never" class="tdoc-section-card">
-          <template #header>
-            <span class="tdoc-section-title">需求对照</span>
-          </template>
-          <p class="tdoc-section-desc">
-            编写技术设计前，建议先对照已确认的最新版需求正文。以下为只读预览，可在弹窗内下载。
-          </p>
-          <div class="tdoc-section-actions">
-            <el-button type="primary" :disabled="!reqDocReady" @click="openReqPreview">查看最新版需求文档</el-button>
-            <span v-if="!reqDocReady" class="tdoc-muted">请先在「需求与文档」中生成并维护需求，再使用本入口。</span>
-          </div>
-        </el-card>
+        <RequirementCompareCard :project-id="projectIdStr" :req-doc-ready="reqDocReady" />
 
         <!-- 2. 技术选型 -->
         <el-card shadow="never" class="tdoc-section-card">
@@ -158,42 +147,6 @@
       </div>
     </template>
 
-    <el-dialog
-      v-model="reqDialogVisible"
-      :title="reqDialogTitle"
-      width="920px"
-      destroy-on-close
-      class="req-preview-dialog"
-      @closed="onReqDialogClosed"
-    >
-      <div v-loading="reqLoading" class="req-dialog-inner">
-        <template v-if="!reqLoading && reqPreviewMarkdown !== ''">
-          <p class="req-dialog-meta">
-            摘要来自当前项目的<strong>最新</strong>需求版本（只读）
-            <template v-if="reqPreviewCreatedAt"> · {{ formatTime(reqPreviewCreatedAt) }}</template>
-          </p>
-          <div class="markdown-body req-md-preview" v-html="reqPreviewHtml" />
-        </template>
-        <el-empty v-else-if="!reqLoading" description="暂无正文" />
-      </div>
-      <template #footer>
-        <el-dropdown trigger="click" :disabled="!reqPreviewMarkdown" @command="onReqExportCommand">
-          <el-button type="primary" plain :disabled="!reqPreviewMarkdown">
-            下载
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="md">Markdown (.md)</el-dropdown-item>
-              <el-dropdown-item command="html">HTML (.html)</el-dropdown-item>
-              <el-dropdown-item command="pdf">PDF（打印为 PDF）</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button @click="reqDialogVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
     <AiAssistDrawer
       v-model="aiTechOpen"
       title="AI 辅助（技术选型）"
@@ -221,7 +174,6 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -229,6 +181,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { apiClient } from '@/api/client'
 import AiAssistDrawer from '@/components/AiAssistDrawer'
 import DiffDialog from '@/components/DiffDialog'
+import RequirementCompareCard from '@/components/RequirementCompareCard'
 import TechDesignModuleDocPanel from '@/features/workspace/pages/design/TechDesignModuleDocPanel.vue'
 import {
   buildTechSelectionDefaultPrompt,
@@ -239,19 +192,12 @@ import type {
   ApiEnvelope,
   ProjectOneData,
   ProjectPatchRequestBody,
-  RequirementDocVersionDetail,
-  RequirementDocVersionListData,
   TechDesignDocVersionDetail,
   TechDesignDocVersionListData,
   TechDesignDocVersionListItem,
   TechDeliveryPart,
 } from '@/types/api-contract'
-import {
-  exportRequirementHtml,
-  exportRequirementMarkdown,
-  markdownToHtmlFragment,
-  printMarkdownAsPdf,
-} from '@/utils/requirementDocExport'
+import { exportRequirementHtml, exportRequirementMarkdown, printMarkdownAsPdf } from '@/utils/requirementDocExport'
 import { formatTechDeliveryPartsForDiff } from '@/utils/techDeliveryPartsNormalize'
 
 const route = useRoute()
@@ -270,12 +216,6 @@ const selectionParts = ref<TechDeliveryPart[]>([])
 
 const aiTechOpen = ref(false)
 const lastAppliedTechSelectionAssistantId = ref<string | null>(null)
-
-const reqDialogVisible = ref(false)
-const reqLoading = ref(false)
-const reqPreviewMarkdown = ref('')
-const reqPreviewVersionNo = ref<number | null>(null)
-const reqPreviewCreatedAt = ref('')
 
 const selectedForDiff = ref<TechDesignDocVersionListItem[]>([])
 const diffVisible = ref(false)
@@ -314,13 +254,6 @@ const versionTableKey = computed(() => list.value.items.map((i) => i.id).join('|
 const subTitlePending = computed(
   () => `完成上方技术选型后，可一键解锁本模块，管理技术设计文档版本（${reqRef.value}）。`,
 )
-
-const reqDialogTitle = computed(() => {
-  const v = reqPreviewVersionNo.value
-  return v != null ? `需求文档（最新 · v${v}）` : '需求文档（最新版）'
-})
-
-const reqPreviewHtml = computed(() => markdownToHtmlFragment(reqPreviewMarkdown.value || ''))
 
 const techSelectionExistingSummary = computed(() => {
   const parts = selectionParts.value
@@ -475,64 +408,6 @@ async function saveTechSelection() {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
     selectionSaving.value = false
-  }
-}
-
-async function openReqPreview() {
-  const pid = projectIdStr.value
-  if (!pid || !reqDocReady.value) return
-  reqDialogVisible.value = true
-  reqPreviewMarkdown.value = ''
-  reqPreviewVersionNo.value = null
-  reqPreviewCreatedAt.value = ''
-  reqLoading.value = true
-  try {
-    const { data } = await apiClient.get<ApiEnvelope<RequirementDocVersionListData>>(
-      `/api/v1/projects/${pid}/requirement-doc/versions`,
-    )
-    const lid = data.data?.latest_version_id
-    if (!lid) {
-      ElMessage.warning('当前项目尚无需求文档版本')
-      reqDialogVisible.value = false
-      return
-    }
-    const { data: d2 } = await apiClient.get<ApiEnvelope<RequirementDocVersionDetail>>(
-      `/api/v1/projects/${pid}/requirement-doc/versions/${lid}`,
-    )
-    const d = d2.data
-    if (!d) {
-      ElMessage.error('无法读取需求版本')
-      reqDialogVisible.value = false
-      return
-    }
-    reqPreviewMarkdown.value = d.markdown ?? ''
-    reqPreviewVersionNo.value = d.version_no
-    reqPreviewCreatedAt.value = d.created_at
-  } catch {
-    ElMessage.error('加载需求文档失败')
-    reqDialogVisible.value = false
-  } finally {
-    reqLoading.value = false
-  }
-}
-
-function onReqDialogClosed() {
-  reqPreviewMarkdown.value = ''
-  reqPreviewVersionNo.value = null
-  reqPreviewCreatedAt.value = ''
-}
-
-function onReqExportCommand(cmd: string) {
-  const md = reqPreviewMarkdown.value
-  if (!md) return
-  const vn = reqPreviewVersionNo.value ?? ''
-  const base = `需求文档-v${vn}`
-  const title = `需求文档 v${vn}`
-  if (cmd === 'md') exportRequirementMarkdown(base, md)
-  else if (cmd === 'html') exportRequirementHtml(base, title, md)
-  else if (cmd === 'pdf') {
-    const ok = printMarkdownAsPdf(title, md)
-    if (!ok) ElMessage.warning('请允许弹出窗口以使用打印为 PDF')
   }
 }
 
@@ -811,13 +686,6 @@ onMounted(() => {
   line-height: 1.55;
 }
 
-.tdoc-section-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
 .tdoc-muted {
   font-size: 13px;
   color: var(--el-text-color-secondary);
@@ -935,19 +803,4 @@ onMounted(() => {
   line-height: 1.5;
 }
 
-.req-dialog-inner {
-  min-height: 200px;
-  max-height: min(70vh, 640px);
-  overflow: auto;
-}
-
-.req-dialog-meta {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
-.req-md-preview {
-  padding: 4px 0;
-}
 </style>
