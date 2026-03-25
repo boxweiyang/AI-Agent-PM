@@ -64,7 +64,7 @@
 
     <el-container class="project-right" direction="vertical">
       <AppHeaderBar :context-project-name="contextProjectTitle" @switch-project="goProjectList" @logout="onLogout" />
-      <el-main class="project-main">
+      <el-main class="project-main" @click="onMainClick">
         <router-view />
       </el-main>
     </el-container>
@@ -85,8 +85,11 @@ import { useAuthStore } from '@/stores/auth'
 import type { ApiEnvelope, ProjectOneData } from '@/types/api-contract'
 
 const SIDEBAR_STORAGE_KEY = 'pmp_project_sidebar_mode'
+const SIDEBAR_AUTO_HIDE_MODE_KEY = 'pmp_project_sidebar_auto_hide_mode'
 
 type SidebarMode = 'full' | 'icons' | 'collapsed'
+
+type SidebarAutoHideMode = 'none' | 'icons' | 'collapsed'
 
 function loadSidebarMode(): SidebarMode {
   try {
@@ -96,6 +99,16 @@ function loadSidebarMode(): SidebarMode {
     /* ignore */
   }
   return 'full'
+}
+
+function loadSidebarAutoHideMode(): SidebarAutoHideMode {
+  try {
+    const v = localStorage.getItem(SIDEBAR_AUTO_HIDE_MODE_KEY)
+    if (v === 'none' || v === 'icons' || v === 'collapsed') return v
+  } catch {
+    /* ignore */
+  }
+  return 'none'
 }
 
 const route = useRoute()
@@ -148,6 +161,19 @@ function cycleSidebar() {
   } catch {
     /* ignore */
   }
+}
+
+function onMainClick() {
+  const mode = loadSidebarAutoHideMode()
+  if (mode === 'icons' && sidebarMode.value !== 'icons') {
+    sidebarMode.value = 'icons'
+    return
+  }
+  if (mode === 'collapsed' && sidebarMode.value !== 'collapsed') {
+    sidebarMode.value = 'collapsed'
+    return
+  }
+  // mode === 'none'：不触发任何行为
 }
 
 watch(

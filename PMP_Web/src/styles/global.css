@@ -73,3 +73,29 @@ html.dark .el-collapse-item__header:hover {
 html.dark .el-card {
   --el-card-border-color: var(--el-border-color-darker);
 }
+
+/**
+ * 公用弹窗满视口滚动约定：
+ * - el-dialog 整体不超过视口高度（避免触发页面下拉）
+ * - 超高内容仅在弹窗内部滚动（滚 body）
+ *
+ * 使用方式：给 el-dialog 添加 class="pmp-viewport-dialog"
+ */
+.pmp-viewport-dialog :deep(.el-dialog__content) {
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.pmp-viewport-dialog :deep(.el-dialog__header) {
+  flex-shrink: 0;
+}
+
+.pmp-viewport-dialog :deep(.el-dialog__body) {
+  flex: 1;
+  overflow: auto;
+}
+
+.pmp-viewport-dialog :deep(.el-dialog__footer) {
+  flex-shrink: 0;
+}

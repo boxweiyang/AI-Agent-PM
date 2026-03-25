@@ -59,15 +59,18 @@
       </div>
       <el-button type="danger" link @click="emit('logout')">退出</el-button>
     </div>
+
+    <SystemSettingsDialog v-model="systemSettingsDialogVisible" />
   </el-header>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ArrowDown, ArrowLeft, Switch } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ThemeSegmented from '@/components/ThemeSegmented'
+import SystemSettingsDialog from '@/features/settings/components/SystemSettingsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { buildHeaderBreadcrumbs } from '@/utils/headerBreadcrumbs'
 
@@ -91,6 +94,8 @@ const emit = defineEmits<{
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+const systemSettingsDialogVisible = ref(false)
 
 const isProjectShell = computed(() => {
   const id = route.params.projectId
@@ -139,7 +144,7 @@ function goBreadcrumbBack() {
 function onFeatureCommand(cmd: string) {
   if (cmd === 'ai') void router.push({ name: 'settings-ai' })
   else if (cmd === 'profile') void router.push({ name: 'settings-profile' })
-  else if (cmd === 'system') void router.push({ name: 'settings-system' })
+  else if (cmd === 'system') systemSettingsDialogVisible.value = true
   else if (cmd === 'last') void router.push({ name: 'enter-last-project' })
 }
 </script>

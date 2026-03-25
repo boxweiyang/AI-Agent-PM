@@ -14,6 +14,49 @@
       </template>
     </el-alert>
 
+    <div class="filter-cards">
+      <el-card shadow="never" class="block-card filter-card">
+        <template #header>
+          <span class="card-title">选择迭代</span>
+        </template>
+        <el-select
+          v-model="iterationFilter"
+          clearable
+          placeholder="选择迭代"
+          style="width: 100%"
+          filterable
+        >
+          <el-option v-for="it in iterationsList" :key="it.id" :label="it.name" :value="it.id" />
+        </el-select>
+      </el-card>
+
+      <el-card shadow="never" class="block-card filter-card">
+        <template #header>
+          <span class="card-title">选择 Story</span>
+        </template>
+        <el-select v-model="storyFilter" clearable placeholder="选择 Story" style="width: 100%" filterable>
+          <el-option v-for="s in storySelectOptions" :key="s.id" :label="s.label" :value="s.id" />
+        </el-select>
+      </el-card>
+
+      <el-card shadow="never" class="block-card filter-card">
+        <template #header>
+          <span class="card-title">查看最新版需求文档</span>
+        </template>
+        <div class="doc-card-actions">
+          <el-button type="primary" plain :disabled="!iterationFilter" @click="openIterationLatestReqDoc">
+            查看迭代最新版
+          </el-button>
+          <el-button type="primary" plain :disabled="!storyFilter" @click="openStoryLatestReqDoc">
+            查看 Story 最新版
+          </el-button>
+        </div>
+        <p class="doc-card-hint">
+          读取对应迭代/Story 的最新版本正文，只用于预览。
+        </p>
+      </el-card>
+    </div>
+
     <el-card shadow="never" class="block-card">
       <template #header>
         <div class="head-row">
@@ -27,12 +70,6 @@
           </el-button>
           <span class="title">Task 与执行</span>
           <div class="tools">
-            <el-select v-model="iterationFilter" clearable placeholder="迭代" style="width: 140px" filterable>
-              <el-option v-for="it in iterationsList" :key="it.id" :label="it.name" :value="it.id" />
-            </el-select>
-            <el-select v-model="storyFilter" clearable placeholder="Story" style="width: 160px" filterable>
-              <el-option v-for="s in storySelectOptions" :key="s.id" :label="s.label" :value="s.id" />
-            </el-select>
             <el-select v-model="statusFilter" clearable placeholder="状态" style="width: 120px">
               <el-option label="待办" value="todo" />
               <el-option label="进行中" value="in_progress" />
@@ -90,6 +127,23 @@
         Task 在「迭代与 Story」页从 Story 跳转可带 <code>story_id</code> 筛选；此处调整执行状态。状态为「已完成」且已绑定接口时，将按类型回写接口管理中的前端/后端/测试完成态（Mock）。
       </p>
     </el-card>
+
+    <el-dialog
+      v-model="docDialogVisible"
+      :title="docDialogTitle"
+      width="860px"
+      destroy-on-close
+    >
+      <template #default>
+        <el-alert v-if="docDialogMetaText" type="info" show-icon :closable="false" class="doc-meta-alert">
+          {{ docDialogMetaText }}
+        </el-alert>
+        <div class="doc-preview-pane markdown-body" v-loading="docDialogLoading">
+          <div v-if="docDialogMarkdown" v-html="docDialogRenderedHtml" />
+          <el-empty v-else description="暂无最新版本正文" />
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -106,7 +160,10 @@ import type {
   PlanningTask,
   PlanningTaskStatus,
   PlanningTaskTypeSuggestion,
+  RequirementDocVersionDetail,
+  RequirementDocVersionListData,
 } from '@/types/api-contract'
+import { markdownToHtmlFragment } from '@/utils/requirementDocExport'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +196,109 @@ const showBackToStory = computed(() => {
   const sid = route.query.story_id
   return typeof sid === 'string' && sid.trim().length > 0
 })
+
+const docDialogVisible = ref(false)
+const docDialogLoading = ref(false)
+const docDialogKind = ref<'iteration' | 'story'>('iteration')
+const docDialogMarkdown = ref('')
+const docDialogMetaText = ref('')
+
+const docDialogTitle = computed(() => {
+  const label = docDialogKind.value === 'iteration' ? '迭代' : 'Story'
+  return `查看 ${label} 最新版需求文档`
+})
+
+const docDialogRenderedHtml = computed(() => markdownToHtmlFragment(docDialogMarkdown.value || ''))
+
+function iterationNameById(id: string) {
+  return iterationsList.value.find((x) => x.id === id)?.name ?? id
+}
+
+function storyTitleById(id: string) {
+  return storyContext.value.get(id)?.title ?? id
+}
+
+async function fetchLatestIterationReqDoc(iterationId: string): Promise<RequirementDocVersionDetail | null> {
+  const pid = projectId.value
+  if (!pid) return null
+  try {
+    const { data } = await apiClient.get<ApiEnvelope<RequirementDocVersionListData>>(
+      `/api/v1/projects/${pid}/iterations/${iterationId}/requirement-doc/versions`,
+    )
+    const latestId = data.data?.latest_version_id
+    if (!latestId) return null
+    const { data: d } = await apiClient.get<ApiEnvelope<RequirementDocVersionDetail>>(
+      `/api/v1/projects/${pid}/iterations/${iterationId}/requirement-doc/versions/${latestId}`,
+    )
+    return d.data ?? null
+  } catch {
+    return null
+  }
+}
+
+async function fetchLatestStoryReqDoc(storyId: string): Promise<RequirementDocVersionDetail | null> {
+  const pid = projectId.value
+  if (!pid) return null
+  try {
+    const { data } = await apiClient.get<ApiEnvelope<RequirementDocVersionListData>>(
+      `/api/v1/projects/${pid}/stories/${storyId}/requirement-doc/versions`,
+    )
+    const latestId = data.data?.latest_version_id
+    if (!latestId) return null
+    const { data: d } = await apiClient.get<ApiEnvelope<RequirementDocVersionDetail>>(
+      `/api/v1/projects/${pid}/stories/${storyId}/requirement-doc/versions/${latestId}`,
+    )
+    return d.data ?? null
+  } catch {
+    return null
+  }
+}
+
+async function openIterationLatestReqDoc() {
+  const iid = iterationFilter.value
+  if (!projectId.value || !iid) return
+
+  docDialogKind.value = 'iteration'
+  docDialogMetaText.value = `迭代：${iterationNameById(iid)} · 正在加载...`
+  docDialogMarkdown.value = ''
+  docDialogLoading.value = true
+  docDialogVisible.value = true
+
+  const d = await fetchLatestIterationReqDoc(iid)
+  if (!d) {
+    ElMessage.warning(`迭代「${iterationNameById(iid)}」暂无需求文档最新版本`)
+    docDialogLoading.value = false
+    return
+  }
+
+  docDialogMetaText.value = `迭代：${iterationNameById(iid)} · v${d.version_no} · ${d.created_at}`
+  docDialogMarkdown.value = d.markdown ?? ''
+
+  docDialogLoading.value = false
+}
+
+async function openStoryLatestReqDoc() {
+  const sid = storyFilter.value
+  if (!projectId.value || !sid) return
+
+  docDialogKind.value = 'story'
+  docDialogMetaText.value = `Story：${storyTitleById(sid)} · 正在加载...`
+  docDialogMarkdown.value = ''
+  docDialogLoading.value = true
+  docDialogVisible.value = true
+
+  const d = await fetchLatestStoryReqDoc(sid)
+  if (!d) {
+    ElMessage.warning(`Story「${storyTitleById(sid)}」暂无需求文档最新版本`)
+    docDialogLoading.value = false
+    return
+  }
+
+  docDialogMetaText.value = `Story：${storyTitleById(sid)} · v${d.version_no} · ${d.created_at}`
+  docDialogMarkdown.value = d.markdown ?? ''
+
+  docDialogLoading.value = false
+}
 
 function goBackToPrevious() {
   // 优先返回到进入 Task 前的页面（通常是 Story 列表页）。
@@ -346,6 +506,30 @@ onMounted(() => {
 .filter-alert {
   margin-bottom: 16px;
 }
+.filter-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 0 16px;
+}
+.filter-card {
+  min-width: 260px;
+  flex: 1;
+}
+.card-title {
+  font-weight: 600;
+}
+.doc-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.doc-card-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
 .block-card {
   border-radius: 8px;
 }
@@ -368,5 +552,20 @@ onMounted(() => {
   margin: 12px 0 0;
   font-size: 13px;
   color: var(--el-text-color-secondary);
+}
+.doc-meta-alert {
+  margin-bottom: 12px;
+}
+.doc-preview-pane {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  padding: 12px 10px;
+  max-height: 68vh;
+  overflow: auto;
+  min-height: 240px;
+}
+.doc-preview-pane :deep(pre) {
+  overflow: auto;
 }
 </style>
