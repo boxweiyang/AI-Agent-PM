@@ -87,6 +87,30 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     meta: { title: '接口管理', artifactKey: 'api_catalog', reqRef: 'REQ-M02C' },
   },
   {
+    path: 'm03/iterations/:iterationId/req-doc/versions/:versionId',
+    name: 'project-m03-iteration-req-version',
+    component: () => import('./pages/iterations/IterationRequirementDocVersionDetailPage.vue'),
+    meta: { title: '迭代需求文档', artifactKey: 'iteration_board', reqRef: 'REQ-M03' },
+  },
+  {
+    path: 'm03/iterations/:iterationId/stories/:storyId/req-doc/versions/:versionId',
+    name: 'project-m03-story-req-version',
+    component: () => import('./pages/iterations/StoryRequirementDocVersionDetailPage.vue'),
+    meta: { title: 'Story 需求文档', artifactKey: 'iteration_board', reqRef: 'REQ-M03' },
+  },
+  {
+    path: 'm03/iterations/:iterationId/stories/:storyId',
+    name: 'project-m03-story-detail',
+    component: () => import('./pages/iterations/StoryDetailPage.vue'),
+    meta: { title: 'Story 详情', artifactKey: 'iteration_board', reqRef: 'REQ-M03' },
+  },
+  {
+    path: 'm03/iterations/:iterationId',
+    name: 'project-m03-iteration-detail',
+    component: () => import('./pages/iterations/IterationDetailPage.vue'),
+    meta: { title: '迭代详情', artifactKey: 'iteration_board', reqRef: 'REQ-M03' },
+  },
+  {
     path: 'm03/iterations',
     name: 'project-m03-iterations',
     component: () => import('./pages/iterations/IterationPlanningPage.vue'),

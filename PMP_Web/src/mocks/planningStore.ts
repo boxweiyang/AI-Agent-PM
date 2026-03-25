@@ -2,8 +2,14 @@
  * REQ-M03 迭代 / Story / Task（草案）与 REQ-M04 执行态 — MSW 内存存储。
  * 契约见 contracts/openapi/openapi.yaml（planning 相关 path）。
  */
+import { deleteAllIterationRequirementDocVersions } from '@/mocks/iterationRequirementDocStore'
+import { deleteAllStoryRequirementDocVersions } from '@/mocks/storyRequirementDocStore'
 import type {
   ApiCatalogTaskSummary,
+  PlanningAiApplyMode,
+  PlanningAiApplyResultData,
+  PlanningAiDraftIterationInput,
+  PlanningAiDraftStoryInput,
   PlanningIteration,
   PlanningIterationCreateBody,
   PlanningIterationPatchBody,
@@ -42,6 +48,7 @@ function seedDemo1(): ProjectPlanningState {
     goal_summary: '完成认证、项目壳与接口管理基础能力，可联调闭环。',
     planned_start_at: null,
     planned_end_at: null,
+    expected_person_days: 25,
     scope_notes: '需求模块：用户与权限、接口管理；交付：Web + 后端',
     sort_order: 0,
     priority: 1,
@@ -54,6 +61,7 @@ function seedDemo1(): ProjectPlanningState {
     goal_summary: 'Task 执行、与接口清单联动、Dashboard 数据同源。',
     planned_start_at: null,
     planned_end_at: null,
+    expected_person_days: 18,
     scope_notes: 'REQ-M03/M04/M08',
     sort_order: 1,
     priority: 2,
@@ -180,6 +188,7 @@ function seedMinimal(projectId: string): ProjectPlanningState {
     goal_summary: '在本迭代完成核心交付目标（可编辑）。',
     planned_start_at: null,
     planned_end_at: null,
+    expected_person_days: null,
     scope_notes: '',
     sort_order: 0,
     priority: 2,
@@ -247,6 +256,7 @@ export function createPlanningIteration(projectId: string, body: PlanningIterati
     goal_summary: body.goal_summary,
     planned_start_at: body.planned_start_at ?? null,
     planned_end_at: body.planned_end_at ?? null,
+    expected_person_days: body.expected_person_days ?? null,
     scope_notes: body.scope_notes ?? '',
     sort_order,
     priority: body.priority ?? null,
@@ -269,7 +279,12 @@ export function deletePlanningIteration(projectId: string, iterationId: string) 
   const s = ensureState(projectId)
   const idx = s.iterations.findIndex((x) => x.id === iterationId)
   if (idx < 0) return { ok: false as const, message: '迭代不存在' }
+  deleteAllIterationRequirementDocVersions(projectId, iterationId)
   const storyIds = s.stories.filter((st) => st.iteration_id === iterationId).map((st) => st.id)
+  // 级联删除时，同时清理该迭代下所有 Story 的需求文档版本链
+  for (const storyId of storyIds) {
+    deleteAllStoryRequirementDocVersions(projectId, storyId)
+  }
   s.tasks = s.tasks.filter((t) => !storyIds.includes(t.story_id))
   s.stories = s.stories.filter((st) => st.iteration_id !== iterationId)
   s.iterations.splice(idx, 1)
@@ -343,6 +358,7 @@ export function deletePlanningStory(projectId: string, storyId: string) {
   const s = ensureState(projectId)
   const idx = s.stories.findIndex((x) => x.id === storyId)
   if (idx < 0) return { ok: false as const, message: 'Story 不存在' }
+  deleteAllStoryRequirementDocVersions(projectId, storyId)
   s.tasks = s.tasks.filter((t) => t.story_id !== storyId)
   s.stories.splice(idx, 1)
   return { ok: true as const }
@@ -368,12 +384,18 @@ export function listPlanningTasksByStory(projectId: string, storyId: string) {
 
 export function listPlanningTasks(
   projectId: string,
-  filters?: { iteration_id?: string; story_id?: string; api_endpoint_id?: string },
+  filters?: {
+    iteration_id?: string
+    story_id?: string
+    api_endpoint_id?: string
+    type_suggestion?: PlanningTaskTypeSuggestion
+  },
 ) {
   const s = ensureState(projectId)
   let items = [...s.tasks]
   if (filters?.iteration_id) items = items.filter((t) => t.iteration_id === filters.iteration_id)
   if (filters?.story_id) items = items.filter((t) => t.story_id === filters.story_id)
+  if (filters?.type_suggestion) items = items.filter((t) => t.type_suggestion === filters.type_suggestion)
   if (filters?.api_endpoint_id) {
     items = items.filter((t) => (t.linked_endpoint_ids || []).includes(filters.api_endpoint_id!))
   }
@@ -463,9 +485,127 @@ export function listPlanningTaskSummaries(projectId: string): { items: ApiCatalo
   }
 }
 
+/** 与需求模块 AI 拆分的 `normalizeModuleTitle` 一致：去首尾空白、合并空白、小写 */
+function normalizePlanningTitle(s: string): string {
+  return s.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
 /**
- * 接口管理绑定 Task 时：同步 Task.linked_endpoint_ids
+ * AI 迭代规划落库（Mock）。
+ * - replace_all：清空迭代（级联 Story/Task）后按草案新建。
+ * - incremental：按规范化名称匹配已有迭代/Story 则 **整字段覆盖**（PATCH），否则新建。
  */
+export function applyIterationPlanningAi(
+  projectId: string,
+  mode: PlanningAiApplyMode,
+  draft: { iterations: PlanningAiDraftIterationInput[]; stories: PlanningAiDraftStoryInput[] },
+): { ok: true; result: PlanningAiApplyResultData } | { ok: false; message: string } {
+  const s = ensureState(projectId)
+  if (!draft.iterations.length) {
+    return { ok: false, message: '草案至少需包含 1 个迭代。' }
+  }
+
+  if (mode === 'replace_all') {
+    const ids = [...s.iterations.map((x) => x.id)]
+    for (const id of ids) {
+      deletePlanningIteration(projectId, id)
+    }
+  }
+
+  const result: PlanningAiApplyResultData = {
+    added_iteration_names: [],
+    updated_iteration_names: [],
+    added_story_titles: [],
+    updated_story_titles: [],
+    skipped_story_titles: [],
+  }
+
+  const iterIdByDraftIndex: string[] = []
+
+  for (const it of draft.iterations) {
+    const nameTrim = it.name.trim()
+    const key = normalizePlanningTitle(nameTrim)
+    if (!key) {
+      return { ok: false, message: '草案中存在空的迭代名称，无法落库。' }
+    }
+
+    if (mode === 'incremental') {
+      const existing = s.iterations.find((x) => normalizePlanningTitle(x.name) === key)
+      if (existing) {
+        const patch: PlanningIterationPatchBody = {
+          name: nameTrim,
+          goal_summary: it.goal_summary.trim(),
+          scope_notes: (it.scope_notes ?? '').trim(),
+          priority: it.priority ?? null,
+        }
+        if (it.sort_order !== undefined) patch.sort_order = it.sort_order
+        patchPlanningIteration(projectId, existing.id, patch)
+        iterIdByDraftIndex.push(existing.id)
+        result.updated_iteration_names.push(nameTrim)
+        continue
+      }
+    }
+
+    const row = createPlanningIteration(projectId, {
+      name: nameTrim,
+      goal_summary: it.goal_summary.trim(),
+      scope_notes: (it.scope_notes ?? '').trim(),
+      priority: it.priority ?? undefined,
+    })
+    if (it.sort_order !== undefined) {
+      patchPlanningIteration(projectId, row.id, { sort_order: it.sort_order })
+    }
+    iterIdByDraftIndex.push(row.id)
+    result.added_iteration_names.push(row.name)
+  }
+
+  for (const st of draft.stories) {
+    if (st.iteration_index < 0 || st.iteration_index >= iterIdByDraftIndex.length) {
+      return { ok: false, message: `Story「${st.title}」的 iteration_index 无效。` }
+    }
+    const iterationId = iterIdByDraftIndex[st.iteration_index]!
+    const rawTitle = st.title.trim()
+    if (!rawTitle) {
+      result.skipped_story_titles.push('（空标题草案已忽略）')
+      continue
+    }
+    const titleKey = normalizePlanningTitle(rawTitle)
+    const inIter = s.stories.filter((x) => x.iteration_id === iterationId)
+    const existingStory = inIter.find((x) => normalizePlanningTitle(x.title) === titleKey)
+    const ac = st.acceptance_criteria.map((x) => x.trim()).filter(Boolean)
+
+    if (existingStory) {
+      const sp: PlanningStoryPatchBody = {
+        title: rawTitle,
+        acceptance_criteria: ac.length ? ac : ['待补充'],
+        requirement_ref: (st.requirement_ref ?? '').trim(),
+        priority: st.priority ?? 2,
+        notes: (st.notes ?? '').trim(),
+      }
+      if (st.sort_order !== undefined) sp.sort_order = st.sort_order
+      const pr = patchPlanningStory(projectId, existingStory.id, sp)
+      if (!pr.ok) return { ok: false, message: pr.message }
+      result.updated_story_titles.push(rawTitle)
+      continue
+    }
+
+    const r = createPlanningStory(projectId, iterationId, {
+      title: rawTitle,
+      acceptance_criteria: ac.length ? ac : ['待补充'],
+      requirement_ref: (st.requirement_ref ?? '').trim(),
+      priority: st.priority ?? 2,
+      notes: (st.notes ?? '').trim(),
+    })
+    if (!r.ok) return { ok: false, message: r.message }
+    if (st.sort_order !== undefined) {
+      patchPlanningStory(projectId, r.data.id, { sort_order: st.sort_order })
+    }
+    result.added_story_titles.push(rawTitle)
+  }
+
+  return { ok: true, result }
+}
+
 export function syncTasksLinkedEndpointsForBinding(projectId: string, endpointId: string, nextTaskIds: string[]) {
   const s = ensureState(projectId)
   const want = new Set(nextTaskIds)

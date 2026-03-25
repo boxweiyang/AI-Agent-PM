@@ -367,6 +367,8 @@ export type PlanningIteration = {
   goal_summary: string
   planned_start_at: string | null
   planned_end_at: string | null
+  /** 预期工作量（人天），可选 */
+  expected_person_days: number | null
   scope_notes: string
   sort_order: number
   priority: PlanningPriority | null
@@ -379,6 +381,7 @@ export type PlanningIterationCreateBody = {
   goal_summary: string
   planned_start_at?: string | null
   planned_end_at?: string | null
+  expected_person_days?: number | null
   scope_notes?: string
   priority?: PlanningPriority
 }
@@ -386,7 +389,14 @@ export type PlanningIterationCreateBody = {
 export type PlanningIterationPatchBody = Partial<
   Pick<
     PlanningIteration,
-    'name' | 'goal_summary' | 'planned_start_at' | 'planned_end_at' | 'scope_notes' | 'sort_order' | 'priority'
+    | 'name'
+    | 'goal_summary'
+    | 'planned_start_at'
+    | 'planned_end_at'
+    | 'expected_person_days'
+    | 'scope_notes'
+    | 'sort_order'
+    | 'priority'
   >
 >
 
@@ -428,6 +438,48 @@ export type PlanningStoryPatchBody = Partial<
 
 export type PlanningStoryListData = {
   items: PlanningStory[]
+}
+
+/** AI 应用迭代规划草案（REQ-M03，与 openapi PlanningAiApplyBody 对齐） */
+export type PlanningAiApplyMode = 'replace_all' | 'incremental'
+
+export type PlanningAiDraftIterationInput = {
+  name: string
+  goal_summary: string
+  scope_notes?: string
+  priority?: PlanningPriority | null
+  sort_order?: number
+}
+
+export type PlanningAiDraftStoryInput = {
+  /** 对应草案中 `iterations` 数组的下标，从 0 开始 */
+  iteration_index: number
+  title: string
+  acceptance_criteria: string[]
+  requirement_ref?: string
+  priority?: PlanningPriority
+  sort_order?: number
+  notes?: string
+}
+
+export type PlanningAiApplyRequestBody = {
+  mode: PlanningAiApplyMode
+  iterations: PlanningAiDraftIterationInput[]
+  stories: PlanningAiDraftStoryInput[]
+}
+
+/** `POST .../planning/ai-apply` 成功时返回的统计（与需求模块 AI 拆分的 added/skipped 语义对齐） */
+export type PlanningAiApplyResultData = {
+  /** 本次新创建的迭代名称 */
+  added_iteration_names: string[]
+  /** 增量模式下按规范化名称匹配并已用草案 **覆盖** 的迭代名称 */
+  updated_iteration_names: string[]
+  /** 本次新创建的 Story 标题 */
+  added_story_titles: string[]
+  /** 增量模式下同标题已存在并已 **覆盖** 的 Story 标题 */
+  updated_story_titles: string[]
+  /** 无法落库的草案（如空标题） */
+  skipped_story_titles: string[]
 }
 
 export type PlanningTaskTypeSuggestion = 'frontend' | 'backend' | 'qa' | 'devops' | 'other'

@@ -17,13 +17,34 @@
     <el-card shadow="never" class="block-card">
       <template #header>
         <div class="head-row">
+          <el-button
+            v-if="showBackToStory"
+            type="primary"
+            size="small"
+            @click="goBackToPrevious"
+          >
+            返回story列表
+          </el-button>
           <span class="title">Task 与执行</span>
           <div class="tools">
+            <el-select v-model="iterationFilter" clearable placeholder="迭代" style="width: 140px" filterable>
+              <el-option v-for="it in iterationsList" :key="it.id" :label="it.name" :value="it.id" />
+            </el-select>
+            <el-select v-model="storyFilter" clearable placeholder="Story" style="width: 160px" filterable>
+              <el-option v-for="s in storySelectOptions" :key="s.id" :label="s.label" :value="s.id" />
+            </el-select>
             <el-select v-model="statusFilter" clearable placeholder="状态" style="width: 120px">
               <el-option label="待办" value="todo" />
               <el-option label="进行中" value="in_progress" />
               <el-option label="待测试" value="testing" />
               <el-option label="已完成" value="done" />
+            </el-select>
+            <el-select v-model="typeFilter" clearable placeholder="类型" style="width: 120px">
+              <el-option label="前端" value="frontend" />
+              <el-option label="后端" value="backend" />
+              <el-option label="测试" value="qa" />
+              <el-option label="运维" value="devops" />
+              <el-option label="其他" value="other" />
             </el-select>
             <el-button @click="loadAll">刷新</el-button>
           </div>
@@ -66,7 +87,7 @@
         </el-table-column>
       </el-table>
       <p class="hint">
-        Task 在「迭代与 Story」中拆分；此处调整执行状态。状态为「已完成」且已绑定接口时，将按类型回写接口管理中的前端/后端/测试完成态（Mock）。
+        Task 在「迭代与 Story」页从 Story 跳转可带 <code>story_id</code> 筛选；此处调整执行状态。状态为「已完成」且已绑定接口时，将按类型回写接口管理中的前端/后端/测试完成态（Mock）。
       </p>
     </el-card>
   </div>
@@ -97,7 +118,12 @@ const tasks = ref<PlanningTask[]>([])
 const storyContext = ref(
   new Map<string, { title: string; iterationName: string }>(),
 )
+const iterationsList = ref<PlanningIteration[]>([])
+const allStories = ref<PlanningStory[]>([])
+const iterationFilter = ref('')
+const storyFilter = ref('')
 const statusFilter = ref<PlanningTaskStatus | ''>('')
+const typeFilter = ref<PlanningTaskTypeSuggestion | ''>('')
 
 const apiEndpointFilter = computed(() => {
   const raw = route.query.api_endpoint_id
@@ -109,6 +135,28 @@ const highlightTaskId = computed(() => {
   return typeof raw === 'string' ? raw : ''
 })
 
+const showBackToStory = computed(() => {
+  const sid = route.query.story_id
+  return typeof sid === 'string' && sid.trim().length > 0
+})
+
+function goBackToPrevious() {
+  // 优先返回到进入 Task 前的页面（通常是 Story 列表页）。
+  if (typeof window !== 'undefined' && window.history.length > 1) {
+    router.back()
+    return
+  }
+  // 兜底：回到迭代与 Story 列表页。
+  if (projectId.value) void router.push({ name: 'project-m03-iterations', params: { projectId: projectId.value } })
+}
+
+const storySelectOptions = computed(() => {
+  const iter = iterationFilter.value
+  let list = allStories.value
+  if (iter) list = list.filter((s) => s.iteration_id === iter)
+  return list.map((s) => ({ id: s.id, label: s.title }))
+})
+
 const displayTasks = computed(() => {
   let list = tasks.value
   if (statusFilter.value) list = list.filter((t) => t.status === statusFilter.value)
@@ -117,6 +165,55 @@ const displayTasks = computed(() => {
   }
   return list
 })
+
+async function loadFilterCatalog() {
+  if (!projectId.value) return
+  try {
+    const { data } = await apiClient.get<ApiEnvelope<{ items: PlanningIteration[] }>>(
+      `/api/v1/projects/${projectId.value}/iterations`,
+    )
+    const iters = data.data?.items ?? []
+    iterationsList.value = iters
+    const acc: PlanningStory[] = []
+    await Promise.all(
+      iters.map(async (it) => {
+        const { data: sd } = await apiClient.get<ApiEnvelope<{ items: PlanningStory[] }>>(
+          `/api/v1/projects/${projectId.value}/iterations/${it.id}/stories`,
+        )
+        acc.push(...(sd.data?.items ?? []))
+      }),
+    )
+    allStories.value = acc
+  } catch {
+    iterationsList.value = []
+    allStories.value = []
+  }
+}
+
+function applyRouteQueryToFilters() {
+  const sid = route.query.story_id
+  if (typeof sid === 'string' && sid) {
+    storyFilter.value = sid
+    const st = allStories.value.find((s) => s.id === sid)
+    if (st) iterationFilter.value = st.iteration_id
+    return
+  }
+  const iid = route.query.iteration_id
+  if (typeof iid === 'string' && iid) {
+    iterationFilter.value = iid
+  }
+}
+
+function syncFiltersToRoute() {
+  if (!projectId.value) return
+  const q: Record<string, string> = {}
+  if (apiEndpointFilter.value) q.api_endpoint_id = apiEndpointFilter.value
+  if (iterationFilter.value) q.iteration_id = iterationFilter.value
+  if (storyFilter.value) q.story_id = storyFilter.value
+  const ht = route.query.highlight_task_id
+  if (typeof ht === 'string' && ht) q.highlight_task_id = ht
+  void router.replace({ name: 'project-m04-tasks', params: { projectId: projectId.value }, query: q })
+}
 
 async function buildStoryContext() {
   if (!projectId.value) return
@@ -146,8 +243,13 @@ async function loadAll() {
   if (!projectId.value) return
   loading.value = true
   try {
+    await loadFilterCatalog()
+    applyRouteQueryToFilters()
     const q = new URLSearchParams()
     if (apiEndpointFilter.value) q.set('api_endpoint_id', apiEndpointFilter.value)
+    if (iterationFilter.value) q.set('iteration_id', iterationFilter.value)
+    if (storyFilter.value) q.set('story_id', storyFilter.value)
+    if (typeFilter.value) q.set('type_suggestion', typeFilter.value)
     const path =
       `/api/v1/projects/${projectId.value}/tasks` + (q.toString() ? `?${q.toString()}` : '')
     const { data } = await apiClient.get<ApiEnvelope<{ items: PlanningTask[] }>>(path)
@@ -202,15 +304,31 @@ function goApiCatalog() {
 }
 
 function clearEndpointFilter() {
+  const q: Record<string, string> = {}
+  if (iterationFilter.value) q.iteration_id = iterationFilter.value
+  if (storyFilter.value) q.story_id = storyFilter.value
+  if (typeFilter.value) q.type_suggestion = typeFilter.value
+  const ht = route.query.highlight_task_id
+  if (typeof ht === 'string' && ht) q.highlight_task_id = ht
   void router.replace({
     name: 'project-m04-tasks',
     params: { projectId: projectId.value },
-    query: {},
+    query: q,
   })
 }
 
+watch(iterationFilter, (next) => {
+  if (!storyFilter.value) return
+  const st = allStories.value.find((s) => s.id === storyFilter.value)
+  if (!st || (next && st.iteration_id !== next)) storyFilter.value = ''
+})
+
+watch([iterationFilter, storyFilter, typeFilter], () => {
+  syncFiltersToRoute()
+})
+
 watch(
-  () => [route.query.api_endpoint_id, projectId.value],
+  () => [route.query.api_endpoint_id, route.query.story_id, route.query.iteration_id, projectId.value],
   () => {
     void loadAll()
   },

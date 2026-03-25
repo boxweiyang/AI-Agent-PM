@@ -67,6 +67,23 @@ import {
   applyPlanningTaskProgressToLinkedEndpoints,
 } from '@/mocks/apiCatalogStore'
 import {
+  appendIterationRequirementDocVersion,
+  createIterationRequirementDocVersion,
+  deleteIterationRequirementDocVersion,
+  getIterationRequirementDocVersion,
+  listIterationRequirementDocVersions,
+  patchIterationRequirementDocVersion,
+} from '@/mocks/iterationRequirementDocStore'
+import {
+  appendStoryRequirementDocVersion,
+  createStoryRequirementDocVersion,
+  deleteStoryRequirementDocVersion,
+  getStoryRequirementDocVersion,
+  listStoryRequirementDocVersions,
+  patchStoryRequirementDocVersion,
+} from '@/mocks/storyRequirementDocStore'
+import {
+  applyIterationPlanningAi,
   createPlanningIteration,
   createPlanningStory,
   createPlanningTask,
@@ -1304,7 +1321,9 @@ export const handlers = [
       capability === 'requirement_doc_assist' ||
       capability === 'requirement_module_doc_assist' ||
       capability === 'tech_design_doc_assist' ||
-      capability === 'api_catalog_constraint_assist'
+      capability === 'api_catalog_constraint_assist' ||
+      capability === 'iteration_requirement_doc_assist' ||
+      capability === 'story_requirement_doc_assist'
     ) {
       const payload = body.payload ?? {}
       const action = String(payload?.action ?? 'chat')
@@ -1314,6 +1333,10 @@ export const handlers = [
       const modHint =
         capability === 'requirement_module_doc_assist'
           ? `\n\n【模块上下文】module_id=${String(payload?.module_id ?? '')} title=${String(payload?.module_title ?? '')}`
+          : capability === 'iteration_requirement_doc_assist'
+          ? `\n\n【迭代上下文】iteration_id=${String(payload?.iteration_id ?? '')} iteration_name=${String(payload?.iteration_name ?? '')}`
+          : capability === 'story_requirement_doc_assist'
+          ? `\n\n【Story 上下文】story_id=${String(payload?.story_id ?? '')} story_name=${String(payload?.story_name ?? '')}`
           : ''
 
       if (action === 'generate_doc') {
@@ -1369,6 +1392,43 @@ export const handlers = [
 - 依赖与排期风险：（待确认）
 - 与需求未对齐处：标注「待确认」并列跟进人
 `
+            : capability === 'iteration_requirement_doc_assist'
+            ? `# 迭代需求说明
+
+## 本迭代目标
+- 诉求摘要：${excerpt}
+- 与项目总需求的对齐关系：（待你在对话中标注章节/模块锚点）
+
+## 范围
+- 包含：（待确认）
+- 不包含：（待确认）
+
+## 里程碑与时间
+- 计划起止与关键节点：（可与迭代表单中的计划日期对齐）
+
+## 验收标准
+- （可观察、可测试的条目）
+
+## 依赖与风险
+- 跨迭代/跨团队依赖：（待确认）
+`
+            : capability === 'story_requirement_doc_assist'
+            ? `# Story 需求说明
+
+## 本 Story 目标
+- 诉求摘要：${excerpt}
+- 与该迭代目标的对齐关系：（待你在对话中标注关联迭代/Story 锚点）
+
+## 范围
+- 包含：（待确认）
+- 不包含：（待确认）
+
+## 验收标准
+- （可观察、可测试的条目）
+
+## 依赖与风险
+- 与其他 Story 的衔接关系：（待确认）
+`
             : `# 需求文档
 
 ## 目标
@@ -1423,6 +1483,16 @@ export const handlers = [
 - 技术栈是否已冻结？与项目详情中的填写是否一致？
 - 架构上最关键的边界是什么（鉴权、多租户、数据一致性）？
 - 非功能指标里哪一条是硬约束（延迟、吞吐、RPO/RTO）？`
+          : capability === 'iteration_requirement_doc_assist'
+          ? `### 下一步我需要你确认/补充的点
+- 本迭代相对总需求文档，**独有**的交付边界是什么？
+- 验收标准希望细化到「可测试步骤」还是「业务结果描述」？
+- 与上一迭代或未关闭项的衔接关系？`
+          : capability === 'story_requirement_doc_assist'
+          ? `### 下一步我需要你确认/补充的点
+- 本 Story 相对该迭代的**独有交付点**是什么？
+- 验收标准希望细化到「可测试步骤」还是「业务结果描述」？
+- 与其他 Story 的依赖/约束关系？`
           : `### 下一步我需要你确认/补充的点
 - 你的「目标」具体是什么？可否用一句话 + 一个可衡量指标描述？
 - 「功能清单」你希望粒度到什么层级？（页面级 / 模块级 / 条目级）
@@ -1508,6 +1578,86 @@ ${message || '（无）'}
 - **部署**：内网 / 公有云 / 混合
 
 讨论完成后点击 **「根据对话生成技术选型并预览」**。
+`,
+        },
+      })
+    }
+    if (capability === 'iteration_planning_assist') {
+      const payload = body.payload ?? {}
+      const action = String(payload?.action ?? 'chat')
+      const umsg = String(payload?.message ?? '').trim()
+
+      if (action === 'generate_iteration_planning') {
+        const iterations = [
+          {
+            name: '迭代1（AI Mock）',
+            goal_summary: '完成核心闭环与基础治理，可演示联调。',
+            scope_notes: '与需求文档对齐；Task 在「Task 与执行」中维护',
+            priority: 0,
+            sort_order: 0,
+          },
+          {
+            name: '迭代2（AI Mock）',
+            goal_summary: '增强协同、可观测与运营侧能力。',
+            scope_notes: 'REQ-M04/M08',
+            priority: 1,
+            sort_order: 1,
+          },
+        ]
+        const stories = [
+          {
+            iteration_index: 0,
+            title: '认证与项目壳',
+            acceptance_criteria: ['未登录访问受保护路由跳转登录', '项目列表可进入工作区'],
+            requirement_ref: 'REQ-M02',
+            priority: 0,
+            notes: '',
+          },
+          {
+            iteration_index: 0,
+            title: '迭代与 Story 规划入口',
+            acceptance_criteria: ['可按迭代维护 Story', '可从 Story 跳转 Task 执行页'],
+            requirement_ref: 'REQ-M03',
+            priority: 1,
+            notes: '',
+          },
+          {
+            iteration_index: 1,
+            title: 'Task 执行与接口绑定',
+            acceptance_criteria: ['Task 状态可回写接口完成态（Mock）', '支持按 Story/迭代筛选'],
+            requirement_ref: 'REQ-M04 + M02C',
+            priority: 0,
+            notes: '',
+          },
+        ]
+        return HttpResponse.json({
+          code: 0,
+          message: 'ok',
+          data: {
+            capability,
+            summary_markdown: `已生成 **${iterations.length}** 个迭代与 **${stories.length}** 条 Story 草案。请在对比弹窗核对后点 **接受**。**覆盖**将清空后重建；**增量**将按规范化名称匹配，**已有迭代与 Story 会用草案整字段覆盖**。`,
+            iterations,
+            stories,
+          },
+        })
+      }
+
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          capability,
+          suggestion: `## 迭代规划讨论（Mock）
+
+### 本轮输入
+${umsg || '（无）'}
+
+### 建议继续说明
+- 希望几个迭代、每个迭代的大目标与边界
+- 每个迭代下优先 Story 与验收标准（AC）
+- 与需求模块（REQ-M02/M02C）的对应关系
+
+讨论完成后点击 **「根据对话生成迭代与 Story 并预览」**。
 `,
         },
       })
@@ -1733,6 +1883,299 @@ ${message || '（无）'}
     return HttpResponse.json({ code: 0, message: 'ok', data: null })
   }),
 
+  http.get('/api/v1/projects/:projectId/iterations/:iterationId/requirement-doc/versions', ({
+    request,
+    params,
+  }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningIteration(projectId, iterationId)) {
+      return HttpResponse.json({ code: 40423, message: '迭代不存在', data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: listIterationRequirementDocVersions(projectId, iterationId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/iterations/:iterationId/requirement-doc/versions', async ({
+    request,
+    params,
+  }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningIteration(projectId, iterationId)) {
+      return HttpResponse.json({ code: 40423, message: '迭代不存在', data: null })
+    }
+    let body: RequirementDocVersionCreateOrAppendBody = {}
+    try {
+      body = (await request.json()) as RequirementDocVersionCreateOrAppendBody
+    } catch {
+      /* ignore */
+    }
+    if (typeof body.markdown === 'string' && typeof body.based_on_version_id === 'string') {
+      const r = appendIterationRequirementDocVersion(projectId, iterationId, body.markdown, body.based_on_version_id)
+      if (!r.ok) return HttpResponse.json({ code: 40002, message: r.message, data: null })
+      const row = r.row
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    if (body.mode === 'empty' || body.mode === 'from_latest') {
+      const row = createIterationRequirementDocVersion(projectId, iterationId, body.mode)
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    return HttpResponse.json({
+      code: 40001,
+      message: '请求体需包含 mode（empty|from_latest）或 markdown + based_on_version_id',
+      data: null,
+    })
+  }),
+
+  http.get('/api/v1/projects/:projectId/iterations/:iterationId/requirement-doc/versions/:versionId', ({
+    request,
+    params,
+  }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const row = getIterationRequirementDocVersion(projectId, iterationId, versionId)
+    if (!row) return HttpResponse.json({ code: 40402, message: '版本不存在', data: null })
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/iterations/:iterationId/requirement-doc/versions/:versionId', async ({
+    request,
+    params,
+  }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let markdown = ''
+    try {
+      const b = (await request.json()) as { markdown?: string }
+      markdown = typeof b.markdown === 'string' ? b.markdown : ''
+    } catch {
+      /* ignore */
+    }
+    const r = patchIterationRequirementDocVersion(projectId, iterationId, versionId, markdown)
+    if (!r.ok) return HttpResponse.json({ code: 40003, message: r.message, data: null })
+    const row = r.row
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/iterations/:iterationId/requirement-doc/versions/:versionId', ({
+    request,
+    params,
+  }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const iterationId = typeof params.iterationId === 'string' ? params.iterationId : params.iterationId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const r = deleteIterationRequirementDocVersion(projectId, iterationId, versionId)
+    if (!r.ok) return HttpResponse.json({ code: 40402, message: r.message, data: null })
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: listIterationRequirementDocVersions(projectId, iterationId),
+    })
+  }),
+
+  http.get('/api/v1/projects/:projectId/stories/:storyId/requirement-doc/versions', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningStory(projectId, storyId)) {
+      return HttpResponse.json({ code: 40423, message: 'Story 不存在', data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: listStoryRequirementDocVersions(projectId, storyId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/stories/:storyId/requirement-doc/versions', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningStory(projectId, storyId)) {
+      return HttpResponse.json({ code: 40423, message: 'Story 不存在', data: null })
+    }
+    let body: RequirementDocVersionCreateOrAppendBody = {}
+    try {
+      body = (await request.json()) as RequirementDocVersionCreateOrAppendBody
+    } catch {
+      /* ignore */
+    }
+    if (typeof body.markdown === 'string' && typeof body.based_on_version_id === 'string') {
+      const r = appendStoryRequirementDocVersion(projectId, storyId, body.markdown, body.based_on_version_id)
+      if (!r.ok) return HttpResponse.json({ code: 40002, message: r.message, data: null })
+      const row = r.row
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    if (body.mode === 'empty' || body.mode === 'from_latest') {
+      const row = createStoryRequirementDocVersion(projectId, storyId, body.mode)
+      return HttpResponse.json({
+        code: 0,
+        message: 'ok',
+        data: {
+          id: row.id,
+          version_no: row.version_no,
+          markdown: row.markdown,
+          is_latest: true,
+          created_at: row.created_at,
+        },
+      })
+    }
+    return HttpResponse.json({
+      code: 40001,
+      message: '请求体需包含 mode（empty|from_latest）或 markdown + based_on_version_id',
+      data: null,
+    })
+  }),
+
+  http.get('/api/v1/projects/:projectId/stories/:storyId/requirement-doc/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const row = getStoryRequirementDocVersion(projectId, storyId, versionId)
+    if (!row) return HttpResponse.json({ code: 40402, message: '版本不存在', data: null })
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/stories/:storyId/requirement-doc/versions/:versionId', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    let markdown = ''
+    try {
+      const b = (await request.json()) as { markdown?: string }
+      markdown = typeof b.markdown === 'string' ? b.markdown : ''
+    } catch {
+      /* ignore */
+    }
+    const r = patchStoryRequirementDocVersion(projectId, storyId, versionId, markdown)
+    if (!r.ok) return HttpResponse.json({ code: 40003, message: r.message, data: null })
+    const row = r.row
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        id: row.id,
+        version_no: row.version_no,
+        markdown: row.markdown,
+        is_latest: row.is_latest,
+        created_at: row.created_at,
+      },
+    })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/stories/:storyId/requirement-doc/versions/:versionId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const storyId = typeof params.storyId === 'string' ? params.storyId : params.storyId?.[0] ?? ''
+    const versionId = typeof params.versionId === 'string' ? params.versionId : params.versionId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const r = deleteStoryRequirementDocVersion(projectId, storyId, versionId)
+    if (!r.ok) return HttpResponse.json({ code: 40402, message: r.message, data: null })
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: listStoryRequirementDocVersions(projectId, storyId),
+    })
+  }),
+
+  http.post('/api/v1/projects/:projectId/planning/ai-apply', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as {
+      mode?: string
+      iterations?: unknown[]
+      stories?: unknown[]
+    }
+    if (body.mode !== 'replace_all' && body.mode !== 'incremental') {
+      return HttpResponse.json({ code: 40001, message: 'mode 须为 replace_all 或 incremental', data: null })
+    }
+    const mode = body.mode
+    if (!Array.isArray(body.iterations) || !Array.isArray(body.stories)) {
+      return HttpResponse.json({ code: 40001, message: 'iterations、stories 须为数组', data: null })
+    }
+    const r = applyIterationPlanningAi(projectId, mode, {
+      iterations: body.iterations as never,
+      stories: body.stories as never,
+    })
+    if (!r.ok) return HttpResponse.json({ code: 40002, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.result })
+  }),
+
   http.get('/api/v1/projects/:projectId/iterations/:iterationId/stories', ({ request, params }) => {
     if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
     const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
@@ -1840,10 +2283,13 @@ ${message || '（无）'}
     const iteration_id = url.searchParams.get('iteration_id') || undefined
     const story_id = url.searchParams.get('story_id') || undefined
     const api_endpoint_id = url.searchParams.get('api_endpoint_id') || undefined
+    const ts = url.searchParams.get('type_suggestion') || undefined
+    const type_suggestion =
+      ts === 'frontend' || ts === 'backend' || ts === 'qa' || ts === 'devops' || ts === 'other' ? ts : undefined
     return HttpResponse.json({
       code: 0,
       message: 'ok',
-      data: listPlanningTasks(projectId, { iteration_id, story_id, api_endpoint_id }),
+      data: listPlanningTasks(projectId, { iteration_id, story_id, api_endpoint_id, type_suggestion }),
     })
   }),
 

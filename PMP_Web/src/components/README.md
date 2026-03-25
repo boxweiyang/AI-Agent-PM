@@ -24,6 +24,7 @@
 import AppHeaderBar from '@/components/AppHeaderBar'
 import AiAssistDrawer from '@/components/AiAssistDrawer'
 import DiffDialog from '@/components/DiffDialog'
+import AiCompletionSummaryDialog from '@/components/AiCompletionSummaryDialog'
 ```
 
 避免写 `*.vue` 全路径（除非有特殊需求）。
@@ -32,4 +33,5 @@ import DiffDialog from '@/components/DiffDialog'
 
 | 日期 | 摘要 |
 |------|------|
+| 2026-03-25 | **`AiCompletionSummaryDialog`**：AI 完成详情弹窗；与接口管理「生成结果」同形，**约定**同类场景统一使用。 |
 | 2026-03-24 | 初版：目录约定与 `index.ts` 说明。 |

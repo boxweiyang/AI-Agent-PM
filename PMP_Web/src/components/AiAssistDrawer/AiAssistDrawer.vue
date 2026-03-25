@@ -118,6 +118,34 @@
           </el-button>
         </div>
       </template>
+      <template v-else-if="assistKind === 'iteration_planning'">
+        <p class="ai-sub-hint">
+          ① 复制提示词到外置 AI；② 请输出约定结构的 **JSON**；③ 粘贴到「回填结果」后点 **解析并预览填入**（先 diff 再接受）。若选**增量**，同名迭代会复用、同名 Story 会跳过（规范化比对）。
+        </p>
+        <div class="ai-actions">
+          <el-button size="small" @click="copyExternalPrompt">复制提示词</el-button>
+        </div>
+        <el-input
+          v-model="externalPromptText"
+          type="textarea"
+          readonly
+          :rows="7"
+          class="external-prompt-readonly"
+        />
+        <p class="ai-sub-hint external-paste-title">回填结果</p>
+        <el-input
+          v-model="externalPasteJson"
+          type="textarea"
+          :rows="11"
+          class="external-paste-input"
+          placeholder='粘贴 JSON：{ "iterations": [...], "stories": [...] }，iteration_index 对应 iterations 下标；支持 ```json 代码块'
+        />
+        <div class="ai-actions">
+          <el-button type="primary" size="small" :loading="externalParsing" @click="applyExternalIterationPlanningPaste">
+            解析并预览填入
+          </el-button>
+        </div>
+      </template>
       <template v-else>
         <p class="ai-sub-hint">复制提示词到外部 AI；将生成内容自行粘贴回 **编辑区** 或切换到 **站内 AI** 继续。</p>
         <div class="ai-actions">
@@ -136,6 +164,12 @@ import { computed, nextTick, ref, watch } from 'vue'
 import DiffDialog from '@/components/DiffDialog'
 import { apiClient } from '@/api/client'
 import type { ApiEnvelope, TechDeliveryPart } from '@/types/api-contract'
+import type { IterationPlanningDraftNormalized } from '@/utils/iterationPlanningDraftNormalize'
+import {
+  formatIterationPlanningDraftForDiff,
+  normalizeIterationPlanningDraftFromUnknown,
+  parseIterationPlanningDraftExternalPaste,
+} from '@/utils/iterationPlanningDraftNormalize'
 import {
   formatTechDeliveryPartsForDiff,
   normalizeTechDeliveryPartsFromUnknown,
@@ -164,10 +198,12 @@ const props = withDefaults(
     /** 为 false 时 diff 弹窗内「接受」将被拦截（如历史版本只读） */
     allowApply?: boolean
     allowApplyMessage?: string
-    /** `markdown_doc`：生成 Markdown 正文；`tech_selection`：生成 `tech_delivery_parts` 并 diff 后写入表单 */
-    assistKind?: 'markdown_doc' | 'tech_selection'
+    /** `markdown_doc`：生成 Markdown 正文；`tech_selection`：生成 `tech_delivery_parts` 并 diff 后写入表单；`iteration_planning`：迭代+Story 草案 diff 后由业务页落库 */
+    assistKind?: 'markdown_doc' | 'tech_selection' | 'iteration_planning'
     /** `assistKind=tech_selection` 时传入，用于 diff 左侧与 payload */
     techSelectionParts?: TechDeliveryPart[]
+    /** `assistKind=iteration_planning` 时传入当前规划可读摘要，作为 diff 左侧 */
+    iterationPlanningBaselineText?: string
     diffLeftHeader?: string
     diffRightHeader?: string
   }>(),
@@ -184,6 +220,7 @@ const props = withDefaults(
     allowApplyMessage: '历史版本不允许写入，请打开最新版本',
     assistKind: 'markdown_doc',
     techSelectionParts: () => [],
+    iterationPlanningBaselineText: '',
     diffLeftHeader: '',
     diffRightHeader: '',
   },
@@ -193,6 +230,10 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'apply', payload: { assistantId: string; text: string }): void
   (e: 'apply-tech-parts', payload: { assistantId: string; parts: TechDeliveryPart[] }): void
+  (
+    e: 'apply-iteration-planning',
+    payload: { assistantId: string; draft: IterationPlanningDraftNormalized },
+  ): void
   (e: 'generated', text: string): void
 }>()
 
@@ -225,28 +266,38 @@ const proposeNewText = ref('')
 const proposeAssistantId = ref<string | null>(null)
 /** `assistKind=tech_selection` 且 diff 打开时，接受后写入表单的结构化数据 */
 const proposePendingTechParts = ref<TechDeliveryPart[] | null>(null)
+/** `assistKind=iteration_planning` 接受后由业务页调用 planning/ai-apply */
+const proposePendingIterationPlan = ref<IterationPlanningDraftNormalized | null>(null)
 
 const diffLeftHeaderEffective = computed(() => {
   if (props.diffLeftHeader?.trim()) return props.diffLeftHeader.trim()
-  return props.assistKind === 'tech_selection' ? '当前选型（表单）' : '原版（当前正文）'
+  if (props.assistKind === 'tech_selection') return '当前选型（表单）'
+  if (props.assistKind === 'iteration_planning') return '当前规划'
+  return '原版（当前正文）'
 })
 
 const diffRightHeaderEffective = computed(() => {
   if (props.diffRightHeader?.trim()) return props.diffRightHeader.trim()
-  return props.assistKind === 'tech_selection' ? 'AI 建议选型' : '新版（AI 建议）'
+  if (props.assistKind === 'tech_selection') return 'AI 建议选型'
+  if (props.assistKind === 'iteration_planning') return 'AI 建议规划'
+  return '新版（AI 建议）'
 })
 
-const generateButtonLabel = computed(() =>
-  props.assistKind === 'tech_selection'
-    ? '根据对话生成技术选型并预览'
-    : '按现有需求生成文档并应用到正文',
-)
+const generateButtonLabel = computed(() => {
+  if (props.assistKind === 'tech_selection') return '根据对话生成技术选型并预览'
+  if (props.assistKind === 'iteration_planning') return '根据对话生成迭代与 Story 并预览'
+  return '按现有需求生成文档并应用到正文'
+})
 
-const chatInputPlaceholder = computed(() =>
-  props.assistKind === 'tech_selection'
-    ? '描述业务场景、性能/安全约束、团队技能偏好等，与 AI 讨论后再生成选型表'
-    : '像你现在这样补充需求/澄清问题，然后发送',
-)
+const chatInputPlaceholder = computed(() => {
+  if (props.assistKind === 'tech_selection') {
+    return '描述业务场景、性能/安全约束、团队技能偏好等，与 AI 讨论后再生成选型表'
+  }
+  if (props.assistKind === 'iteration_planning') {
+    return '说明发布节奏、迭代目标、Story 粒度与依赖，与 AI 讨论后再生成规划草案'
+  }
+  return '像你现在这样补充需求/澄清问题，然后发送'
+})
 
 const effectiveDocumentBaseline = computed(() => {
   if (props.documentText !== undefined && props.documentText !== null) return props.documentText
@@ -362,7 +413,10 @@ function pickText(resp: unknown): string {
   return JSON.stringify(r, null, 2)
 }
 
-async function invokeAi(action: 'chat' | 'generate_doc' | 'generate_tech_selection', message?: string) {
+async function invokeAi(
+  action: 'chat' | 'generate_doc' | 'generate_tech_selection' | 'generate_iteration_planning',
+  message?: string,
+) {
   const historyLite = messages.value
     .slice(-12)
     .map((m) => ({ role: m.role, content: m.content }))
@@ -485,9 +539,61 @@ async function generateTechSelection() {
     }
 
     proposePendingTechParts.value = parts
+    proposePendingIterationPlan.value = null
     proposeOldText.value = formatTechDeliveryPartsForDiff(props.techSelectionParts ?? [])
     proposeNewText.value = formatTechDeliveryPartsForDiff(parts)
     proposeAssistantId.value = assistantId
+    proposeDiffOpen.value = true
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : 'AI 生成失败')
+  } finally {
+    generatingDoc.value = false
+  }
+}
+
+async function generateIterationPlanning() {
+  if (mode.value !== 'builtin') return
+  if (generatingDoc.value) return
+  if (messages.value.filter((m) => m.role === 'user').length === 0) {
+    ElMessage.warning('请先发送至少一条对话，说明迭代目标与 Story 期望')
+    return
+  }
+  if (messages.value.some((m) => m.role === 'assistant' && m.streaming)) return
+
+  generatingDoc.value = true
+  try {
+    const assistantId = nextId('a')
+    messages.value.push({ id: assistantId, role: 'assistant', content: '', waiting: true })
+    scrollToBottom()
+
+    const resp = await invokeAi('generate_iteration_planning')
+    const data = resp as Record<string, unknown>
+    const draft = normalizeIterationPlanningDraftFromUnknown(data)
+    const summary =
+      typeof data.summary_markdown === 'string' && data.summary_markdown.trim()
+        ? data.summary_markdown.trim()
+        : draft
+          ? `已生成 **${draft.iterations.length}** 个迭代与 **${draft.stories.length}** 条 Story 草案，请在对比弹窗中核对后点击「接受」。`
+          : ''
+
+    const row = messages.value.find((x) => x.id === assistantId)
+    if (row) {
+      row.waiting = false
+      row.streaming = false
+      row.content = summary
+    }
+
+    if (!draft) {
+      ElMessage.error('AI 未返回有效的迭代规划数据，请重试')
+      return
+    }
+
+    proposePendingIterationPlan.value = draft
+    const left = (props.iterationPlanningBaselineText ?? '').trim() || '（当前无规划数据）'
+    proposeOldText.value = left
+    proposeNewText.value = formatIterationPlanningDraftForDiff(draft)
+    proposeAssistantId.value = assistantId
+    proposePendingTechParts.value = null
     proposeDiffOpen.value = true
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : 'AI 生成失败')
@@ -501,6 +607,10 @@ async function generateDoc() {
   if (generatingDoc.value) return
   if (props.assistKind === 'tech_selection') {
     await generateTechSelection()
+    return
+  }
+  if (props.assistKind === 'iteration_planning') {
+    await generateIterationPlanning()
     return
   }
   if (messages.value.filter((m) => m.role === 'user').length === 0) {
@@ -574,14 +684,21 @@ function onProposeDiffAccept() {
   const aid = proposeAssistantId.value
   if (!aid) return
   truncateHistoryToAssistantId(aid)
-  const pending = proposePendingTechParts.value
-  if (pending && pending.length > 0) {
-    emit('apply-tech-parts', { assistantId: aid, parts: pending })
-    proposePendingTechParts.value = null
-    ElMessage.success('已填入表单，可继续编辑后点「确定保存」写入项目')
+  const planDraft = proposePendingIterationPlan.value
+  if (planDraft) {
+    emit('apply-iteration-planning', { assistantId: aid, draft: planDraft })
+    proposePendingIterationPlan.value = null
+    ElMessage.success('已提交规划草案，正在按所选模式落库…')
   } else {
-    emit('apply', { assistantId: aid, text: proposeNewText.value })
-    ElMessage.success('已接受修改并应用到正文')
+    const pending = proposePendingTechParts.value
+    if (pending && pending.length > 0) {
+      emit('apply-tech-parts', { assistantId: aid, parts: pending })
+      proposePendingTechParts.value = null
+      ElMessage.success('已填入表单，可继续编辑后点「确定保存」写入项目')
+    } else {
+      emit('apply', { assistantId: aid, text: proposeNewText.value })
+      ElMessage.success('已接受修改并应用到正文')
+    }
   }
   emit('update:modelValue', false)
   proposeAssistantId.value = null
@@ -591,6 +708,7 @@ function onProposeDiffRollback() {
   truncateHistoryToAssistantId(props.anchorAssistantId ?? null)
   proposeAssistantId.value = null
   proposePendingTechParts.value = null
+  proposePendingIterationPlan.value = null
 }
 
 defineExpose({
@@ -631,8 +749,31 @@ function applyExternalTechSelectionPaste() {
     proposeOldText.value = formatTechDeliveryPartsForDiff(props.techSelectionParts ?? [])
     proposeNewText.value = formatTechDeliveryPartsForDiff(parts)
     proposeAssistantId.value = nextId('ext')
+    proposePendingIterationPlan.value = null
     proposeDiffOpen.value = true
     ElMessage.success('已打开对比，确认后点击「接受」填入表单')
+  } finally {
+    externalParsing.value = false
+  }
+}
+
+function applyExternalIterationPlanningPaste() {
+  if (props.assistKind !== 'iteration_planning') return
+  externalParsing.value = true
+  try {
+    const draft = parseIterationPlanningDraftExternalPaste(externalPasteJson.value)
+    if (!draft) {
+      ElMessage.error('无法解析：请粘贴含 iterations、stories 的 JSON 对象（支持 ```json 代码块）。')
+      return
+    }
+    proposePendingIterationPlan.value = draft
+    proposePendingTechParts.value = null
+    const left = (props.iterationPlanningBaselineText ?? '').trim() || '（当前无规划数据）'
+    proposeOldText.value = left
+    proposeNewText.value = formatIterationPlanningDraftForDiff(draft)
+    proposeAssistantId.value = nextId('ext')
+    proposeDiffOpen.value = true
+    ElMessage.success('已打开对比，确认后点击「接受」落库')
   } finally {
     externalParsing.value = false
   }

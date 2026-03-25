@@ -235,19 +235,11 @@
         <el-button type="primary" @click="runAiGenerate">开始生成</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="generateResultDialog" title="接口清单生成结果" width="520px">
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="生成模式">{{ latestGenerateResult.mode === 'full_replace' ? '全量覆盖' : '增量新增' }}</el-descriptions-item>
-        <el-descriptions-item label="本次新增">{{ latestGenerateResult.added }}</el-descriptions-item>
-        <el-descriptions-item label="本次跳过">{{ latestGenerateResult.skipped }}</el-descriptions-item>
-        <el-descriptions-item label="生成后总数">{{ latestGenerateResult.total_after }}</el-descriptions-item>
-        <el-descriptions-item label="约束版本">{{ latestGenerateResult.constraint_version }}</el-descriptions-item>
-        <el-descriptions-item label="生成时间">{{ latestGenerateResult.generated_at ? formatTime(latestGenerateResult.generated_at) : '-' }}</el-descriptions-item>
-      </el-descriptions>
-      <template #footer>
-        <el-button type="primary" @click="generateResultDialog = false">知道了</el-button>
-      </template>
-    </el-dialog>
+    <AiCompletionSummaryDialog
+      v-model="generateResultDialog"
+      title="接口清单生成结果"
+      :rows="aiGenerateSummaryRows"
+    />
     <el-dialog v-model="taskBindDialog" title="绑定Task" width="560px">
       <p class="constraint-preview">当前接口：{{ bindingEndpointTitle }}</p>
       <el-select v-model="selectedTaskIds" multiple style="width: 100%" placeholder="选择一个或多个Task">
@@ -268,6 +260,8 @@ import { MoreFilled } from '@element-plus/icons-vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiClient } from '@/api/client'
+import AiCompletionSummaryDialog from '@/components/AiCompletionSummaryDialog'
+import type { AiCompletionSummaryRow } from '@/components/AiCompletionSummaryDialog'
 import DiffDialog from '@/components/DiffDialog'
 import type { ApiCatalogAiGenerateMode, ApiCatalogConstraint, ApiCatalogConstraintVersionListData, ApiCatalogConstraintVersionListItem, ApiCatalogEndpoint, ApiCatalogTaskSummary, ApiEnvelope, ApiHttpMethod } from '@/types/api-contract'
 
@@ -319,6 +313,18 @@ const taskTitleMap = computed<Record<string, string>>(() => {
     m[t.id] = t.title
   })
   return m
+})
+
+const aiGenerateSummaryRows = computed<AiCompletionSummaryRow[]>(() => {
+  const r = latestGenerateResult.value
+  return [
+    { label: '生成模式', value: r.mode === 'full_replace' ? '全量覆盖' : '增量新增' },
+    { label: '本次新增', value: String(r.added) },
+    { label: '本次跳过', value: String(r.skipped) },
+    { label: '生成后总数', value: String(r.total_after) },
+    { label: '约束版本', value: r.constraint_version },
+    { label: '生成时间', value: r.generated_at ? formatTime(r.generated_at) : '—' },
+  ]
 })
 
 const grouped = computed(() => {

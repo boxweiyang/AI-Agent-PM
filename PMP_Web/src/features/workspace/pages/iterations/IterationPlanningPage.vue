@@ -16,7 +16,10 @@
       <template #header>
         <div class="head-row">
           <span class="title">迭代规划</span>
-          <el-button type="primary" @click="openIterDialog()">新建迭代</el-button>
+          <div class="head-actions">
+            <el-button @click="openPlanningAiModeDialog">AI 辅助规划</el-button>
+            <el-button type="primary" @click="openIterDialog()">新建迭代</el-button>
+          </div>
         </div>
       </template>
       <el-table
@@ -29,14 +32,24 @@
         <el-table-column prop="name" label="迭代名称" min-width="160" />
         <el-table-column prop="goal_summary" label="目标摘要" min-width="220" show-overflow-tooltip />
         <el-table-column prop="scope_notes" label="范围说明" min-width="160" show-overflow-tooltip />
+        <el-table-column label="计划" min-width="148" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span>{{ formatPlanRange(row) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="预期人天" width="96">
+          <template #default="{ row }">
+            <span>{{ row.expected_person_days != null ? row.expected_person_days : '—' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="优先级" width="88">
           <template #default="{ row }">
             <span>{{ row.priority ?? '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="openIterDialog(row)">编辑</el-button>
+            <el-button link type="primary" @click.stop="goIterationDetail(row)">详情</el-button>
             <el-button link type="danger" @click.stop="confirmDeleteIter(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -50,68 +63,92 @@
           <el-button type="primary" @click="openStoryDialog()">新建 Story</el-button>
         </div>
       </template>
-      <el-table
-        v-loading="storyLoading"
-        :data="stories"
-        row-key="id"
-        highlight-current-row
-        @current-change="onSelectStory"
-      >
+      <el-table v-loading="storyLoading" :data="stories" row-key="id">
         <el-table-column prop="title" label="标题" min-width="180" />
         <el-table-column label="验收标准 AC" min-width="240">
           <template #default="{ row }">
             <span class="ac-preview">{{ row.acceptance_criteria.join('；') }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="requirement_ref" label="关联需求" width="140" show-overflow-tooltip />
+        <el-table-column label="Task总数" width="110">
+          <template #default="{ row }">
+            <span>{{ getStoryTaskTotal(row.id) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="进行中" width="96">
+          <template #default="{ row }">
+            <el-tag v-if="storyTasksLoading" size="small" type="info">—</el-tag>
+            <el-tag v-else size="small" type="warning">{{ getStoryTaskDoing(row.id) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="已完成" width="96">
+          <template #default="{ row }">
+            <el-tag v-if="storyTasksLoading" size="small" type="info">—</el-tag>
+            <el-tag v-else size="small" type="success">{{ getStoryTaskDone(row.id) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="优先级" width="88">
           <template #default="{ row }">{{ row.priority }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="openStoryDialog(row)">编辑</el-button>
-            <el-button link type="primary" @click.stop="goTasksForStory(row)">划分 Task</el-button>
+            <el-button link type="primary" @click.stop="goStoryDetail(row)">详情</el-button>
+            <el-button link type="primary" @click.stop="goTasksForStory(row)">查看 Task</el-button>
             <el-button link type="danger" @click.stop="confirmDeleteStory(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-card v-if="selectedStory" shadow="never" class="block-card">
-      <template #header>
-        <div class="head-row">
-          <span class="title">Task 草案 · {{ selectedStory.title }}</span>
-          <el-button type="primary" @click="openTaskDialog()">新建 Task</el-button>
-        </div>
-      </template>
-      <el-table v-loading="taskLoading" :data="tasks" row-key="id">
-        <el-table-column prop="title" label="标题" min-width="200" />
-        <el-table-column label="类型建议" width="110">
-          <template #default="{ row }">{{ typeLabel(row.type_suggestion) }}</template>
-        </el-table-column>
-        <el-table-column label="优先级" width="72">
-          <template #default="{ row }">{{ row.priority }}</template>
-        </el-table-column>
-        <el-table-column label="执行状态" width="110">
-          <template #default="{ row }">
-            <el-tag size="small" :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="关联接口数" width="100">
-          <template #default="{ row }">{{ (row.linked_endpoint_ids || []).length }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click.stop="openTaskDialog(row)">编辑</el-button>
-            <el-button link type="danger" @click.stop="confirmDeleteTask(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <p class="hint">执行与看板请前往「Task 与执行」模块；此处可维护拆分草案与关联接口（M02C）。</p>
-    </el-card>
+    <p class="page-foot-hint">Task 拆分与执行态请在「Task 与执行」中维护；Story 行可跳转并自动按 Story 筛选。</p>
     </div>
 
-    <el-dialog v-model="iterDialog" :title="iterEditId ? '编辑迭代' : '新建迭代'" width="520px" destroy-on-close>
+    <el-dialog v-model="planningAiModeDialog" title="AI 生成迭代与 Story" width="560px" destroy-on-close>
+      <p class="mode-hint">打开 AI 抽屉前请选择接受草案后的落库方式（与「需求模块 · AI 模块化拆分」两种模式对齐）：</p>
+      <el-radio-group v-model="planningAiModePick" class="mode-radios">
+        <el-radio label="replace_all" border>
+          <div class="mode-option">
+            <div class="mode-option-title">全部覆盖（重建）</div>
+            <div class="mode-option-desc">
+              将<strong>删除当前所有迭代</strong>并<strong>级联删除</strong>其下 Story 与 Task，再按 AI 草案重建。
+            </div>
+          </div>
+        </el-radio>
+        <el-radio label="incremental" border>
+          <div class="mode-option">
+            <div class="mode-option-title">增量匹配覆盖</div>
+            <div class="mode-option-desc">
+              按<strong>规范化迭代名称</strong>匹配到已有迭代时，用草案<strong>整字段覆盖</strong>该迭代。Story 在所属迭代内按<strong>规范化标题</strong>匹配：已存在则<strong>整字段覆盖</strong>，否则<strong>新增</strong>。无法落库的草案（如空标题）将跳过。
+            </div>
+          </div>
+        </el-radio>
+      </el-radio-group>
+      <template #footer>
+        <el-button @click="planningAiModeDialog = false">取消</el-button>
+        <el-button type="primary" :loading="planningAiBaselineLoading" @click="confirmPlanningAiMode">继续</el-button>
+      </template>
+    </el-dialog>
+
+    <AiCompletionSummaryDialog
+      v-model="planningAiSummaryVisible"
+      title="迭代规划应用结果"
+      :rows="planningAiSummaryRows"
+    />
+
+    <AiAssistDrawer
+      v-model="aiPlanningOpen"
+      title="AI 辅助（迭代规划）"
+      capability="iteration_planning_assist"
+      assist-kind="iteration_planning"
+      :default-prompt="iterationPlanningDefaultPrompt"
+      :external-prompt="iterationPlanningExternalPrompt"
+      :payload-base="aiPlanningPayloadBase"
+      :memory-key="aiPlanningMemoryKey"
+      :iteration-planning-baseline-text="planningBaselineForAi"
+      @apply-iteration-planning="onApplyIterationPlanningFromAi"
+    />
+
+    <el-dialog v-model="iterDialog" title="新建迭代" width="520px" destroy-on-close>
       <el-form label-width="100px">
         <el-form-item label="名称" required>
           <el-input v-model="iterForm.name" placeholder="如迭代1-基础能力" />
@@ -121,6 +158,37 @@
         </el-form-item>
         <el-form-item label="范围说明">
           <el-input v-model="iterForm.scope_notes" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item label="计划开始">
+          <el-date-picker
+            v-model="iterForm.planned_start_date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="可选"
+            clearable
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="计划结束">
+          <el-date-picker
+            v-model="iterForm.planned_end_date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="可选"
+            clearable
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="预期人天">
+          <el-input-number
+            v-model="iterForm.expected_person_days"
+            :min="0"
+            :precision="1"
+            :step="0.5"
+            controls-position="right"
+            placeholder="可选"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="优先级">
           <el-select v-model="iterForm.priority" clearable placeholder="可选" style="width: 100%">
@@ -146,9 +214,6 @@
           </div>
           <el-button size="small" @click="storyForm.acceptance_criteria.push('')">+ 添加 AC</el-button>
         </el-form-item>
-        <el-form-item label="关联需求">
-          <el-input v-model="storyForm.requirement_ref" placeholder="模块或章节锚点" />
-        </el-form-item>
         <el-form-item label="优先级">
           <el-select v-model="storyForm.priority" style="width: 100%">
             <el-option v-for="p in 5" :key="p - 1" :label="String(p - 1)" :value="p - 1" />
@@ -164,66 +229,39 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="taskDialog" :title="taskEditId ? '编辑 Task' : '新建 Task'" width="560px" destroy-on-close>
-      <el-form label-width="108px">
-        <el-form-item label="标题" required>
-          <el-input v-model="taskForm.title" />
-        </el-form-item>
-        <el-form-item label="说明">
-          <el-input v-model="taskForm.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="类型建议" required>
-          <el-select v-model="taskForm.type_suggestion" style="width: 100%">
-            <el-option label="前端" value="frontend" />
-            <el-option label="后端" value="backend" />
-            <el-option label="测试" value="qa" />
-            <el-option label="运维/DevOps" value="devops" />
-            <el-option label="其他" value="other" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="优先级">
-          <el-select v-model="taskForm.priority" style="width: 100%">
-            <el-option v-for="p in 5" :key="p - 1" :label="String(p - 1)" :value="p - 1" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="taskEditId" label="执行状态">
-          <el-select v-model="taskForm.status" style="width: 100%">
-            <el-option label="待办" value="todo" />
-            <el-option label="进行中" value="in_progress" />
-            <el-option label="待测试" value="testing" />
-            <el-option label="已完成" value="done" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="taskDialog = false">取消</el-button>
-        <el-button type="primary" :loading="taskSaving" @click="saveTask">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import RequirementCompareCard from '@/components/RequirementCompareCard'
+import AiAssistDrawer from '@/components/AiAssistDrawer'
+import AiCompletionSummaryDialog from '@/components/AiCompletionSummaryDialog'
+import type { AiCompletionSummaryRow } from '@/components/AiCompletionSummaryDialog'
+import {
+  buildIterationPlanningDefaultPrompt,
+  buildIterationPlanningExternalPrompt,
+} from '@/config/aiPromptTemplates'
 import { apiClient } from '@/api/client'
 import type {
   ApiEnvelope,
+  PlanningAiApplyMode,
+  PlanningAiApplyRequestBody,
+  PlanningAiApplyResultData,
   PlanningIteration,
   PlanningIterationCreateBody,
+  PlanningTask,
   PlanningStory,
   PlanningStoryCreateBody,
-  PlanningTask,
-  PlanningTaskCreateBody,
-  PlanningTaskStatus,
-  PlanningTaskTypeSuggestion,
   ProjectOneData,
 } from '@/types/api-contract'
+import type { IterationPlanningDraftNormalized } from '@/utils/iterationPlanningDraftNormalize'
 
 const route = useRoute()
+const router = useRouter()
 
 const projectId = computed(() => (typeof route.params.projectId === 'string' ? route.params.projectId : ''))
 const reqRef = computed(() => (route.meta.reqRef as string) ?? '')
@@ -253,18 +291,53 @@ const selectedIteration = ref<PlanningIteration | null>(null)
 
 const stories = ref<PlanningStory[]>([])
 const storyLoading = ref(false)
-const selectedStory = ref<PlanningStory | null>(null)
+const tasksForIteration = ref<PlanningTask[]>([])
+const storyTasksLoading = ref(false)
 
-const tasks = ref<PlanningTask[]>([])
-const taskLoading = ref(false)
+const storyTaskStatsById = computed(() => {
+  const m = new Map<string, { total: number; doing: number; done: number }>()
+  for (const t of tasksForIteration.value) {
+    if (!t.story_id) continue
+    const cur = m.get(t.story_id) ?? { total: 0, doing: 0, done: 0 }
+    cur.total += 1
+    if (t.status === 'done') cur.done += 1
+    else if (t.status === 'in_progress' || t.status === 'testing') cur.doing += 1
+    m.set(t.story_id, cur)
+  }
+  return m
+})
+
+function getStoryTaskTotal(storyId: string) {
+  return storyTaskStatsById.value.get(storyId)?.total ?? 0
+}
+
+function getStoryTaskDoing(storyId: string) {
+  return storyTaskStatsById.value.get(storyId)?.doing ?? 0
+}
+
+function getStoryTaskDone(storyId: string) {
+  return storyTaskStatsById.value.get(storyId)?.done ?? 0
+}
+
+const planningAiModeDialog = ref(false)
+const planningAiModePick = ref<PlanningAiApplyMode>('incremental')
+const planningAiApplyMode = ref<PlanningAiApplyMode | null>(null)
+const planningBaselineForAi = ref('')
+const planningAiBaselineLoading = ref(false)
+const aiPlanningOpen = ref(false)
+
+const planningAiSummaryVisible = ref(false)
+const planningAiSummaryRows = ref<AiCompletionSummaryRow[]>([])
 
 const iterDialog = ref(false)
-const iterEditId = ref<string | null>(null)
 const iterSaving = ref(false)
 const iterForm = ref({
   name: '',
   goal_summary: '',
   scope_notes: '',
+  planned_start_date: '' as string | null,
+  planned_end_date: '' as string | null,
+  expected_person_days: null as number | null,
   priority: null as number | null,
 })
 
@@ -274,21 +347,30 @@ const storySaving = ref(false)
 const storyForm = ref({
   title: '',
   acceptance_criteria: [''] as string[],
-  requirement_ref: '',
   priority: 2 as number,
   notes: '',
 })
 
-const taskDialog = ref(false)
-const taskEditId = ref<string | null>(null)
-const taskSaving = ref(false)
-const taskForm = ref({
-  title: '',
-  description: '',
-  type_suggestion: 'backend' as PlanningTaskTypeSuggestion,
-  priority: 2 as number,
-  status: 'todo' as PlanningTaskStatus,
-})
+const iterationPlanningDefaultPrompt = computed(() =>
+  buildIterationPlanningDefaultPrompt({
+    projectName: project.value?.name?.trim() || '（未命名项目）',
+    planningBaselineSummary: planningBaselineForAi.value.trim() || '（当前无迭代与 Story）',
+  }),
+)
+
+const iterationPlanningExternalPrompt = computed(() =>
+  buildIterationPlanningExternalPrompt({
+    projectName: project.value?.name?.trim() || '（未命名项目）',
+    planningBaselineSummary: planningBaselineForAi.value.trim() || '（当前无迭代与 Story）',
+  }),
+)
+
+const aiPlanningPayloadBase = computed(() => ({
+  project_id: projectId.value,
+  project_name: project.value?.name ?? '',
+}))
+
+const aiPlanningMemoryKey = computed(() => (projectId.value ? `iteration_planning:${projectId.value}` : ''))
 
 async function loadIterations() {
   if (!projectId.value) return
@@ -312,12 +394,6 @@ async function loadIterations() {
 
 function onSelectIteration(row: PlanningIteration | null) {
   selectedIteration.value = row
-  selectedStory.value = null
-  tasks.value = []
-}
-
-function onSelectStory(row: PlanningStory | null) {
-  selectedStory.value = row
 }
 
 async function loadStories() {
@@ -331,10 +407,6 @@ async function loadStories() {
       `/api/v1/projects/${projectId.value}/iterations/${selectedIteration.value.id}/stories`,
     )
     stories.value = data.data?.items ?? []
-    if (selectedStory.value) {
-      const cur = stories.value.find((x) => x.id === selectedStory.value!.id)
-      selectedStory.value = cur ?? null
-    }
   } catch {
     stories.value = []
     ElMessage.error('加载 Story 失败')
@@ -343,22 +415,22 @@ async function loadStories() {
   }
 }
 
-async function loadTasks() {
-  if (!projectId.value || !selectedStory.value) {
-    tasks.value = []
+async function loadTasksForIteration() {
+  if (!projectId.value || !selectedIteration.value) {
+    tasksForIteration.value = []
     return
   }
-  taskLoading.value = true
+  storyTasksLoading.value = true
   try {
     const { data } = await apiClient.get<ApiEnvelope<{ items: PlanningTask[] }>>(
-      `/api/v1/projects/${projectId.value}/stories/${selectedStory.value.id}/tasks`,
+      `/api/v1/projects/${projectId.value}/tasks?iteration_id=${selectedIteration.value.id}`,
     )
-    tasks.value = data.data?.items ?? []
+    tasksForIteration.value = data.data?.items ?? []
   } catch {
-    tasks.value = []
-    ElMessage.error('加载 Task 失败')
+    tasksForIteration.value = []
+    ElMessage.error('加载 Story 任务统计失败')
   } finally {
-    taskLoading.value = false
+    storyTasksLoading.value = false
   }
 }
 
@@ -366,13 +438,7 @@ watch(
   () => selectedIteration.value?.id,
   () => {
     void loadStories()
-  },
-)
-
-watch(
-  () => selectedStory.value?.id,
-  () => {
-    void loadTasks()
+    void loadTasksForIteration()
   },
 )
 
@@ -380,27 +446,177 @@ watch(
   () => projectId.value,
   () => {
     selectedIteration.value = null
-    selectedStory.value = null
     stories.value = []
-    tasks.value = []
+    tasksForIteration.value = []
     void fetchProject()
     void loadIterations()
   },
 )
 
-function openIterDialog(row?: PlanningIteration) {
-  iterEditId.value = row?.id ?? null
-  if (row) {
-    iterForm.value = {
-      name: row.name,
-      goal_summary: row.goal_summary,
-      scope_notes: row.scope_notes,
-      priority: row.priority,
+async function buildPlanningBaselineMarkdown(): Promise<string> {
+  if (!projectId.value) return '（无项目）'
+  try {
+    const { data } = await apiClient.get<ApiEnvelope<{ items: PlanningIteration[] }>>(
+      `/api/v1/projects/${projectId.value}/iterations`,
+    )
+    const iters = [...(data.data?.items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+    if (!iters.length) return '（当前无迭代与 Story）'
+    const lines: string[] = []
+    for (const it of iters) {
+      lines.push(`## 迭代：${it.name}`)
+      lines.push(`- 目标：${it.goal_summary}`)
+      if (it.scope_notes?.trim()) lines.push(`- 范围：${it.scope_notes.trim()}`)
+      const { data: sd } = await apiClient.get<ApiEnvelope<{ items: PlanningStory[] }>>(
+        `/api/v1/projects/${projectId.value}/iterations/${it.id}/stories`,
+      )
+      const stList = [...(sd.data?.items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+      for (const s of stList) {
+        lines.push(`### Story：${s.title}`)
+        lines.push(`- AC：${s.acceptance_criteria.join('；')}`)
+        lines.push('')
+      }
+      lines.push('')
     }
-  } else {
-    iterForm.value = { name: '', goal_summary: '', scope_notes: '', priority: null }
+    return lines.join('\n').trim()
+  } catch {
+    return '（加载当前规划失败）'
+  }
+}
+
+function openPlanningAiModeDialog() {
+  planningAiModePick.value = 'incremental'
+  planningAiModeDialog.value = true
+}
+
+function formatCompletedAt(iso: string) {
+  try {
+    return new Date(iso).toLocaleString()
+  } catch {
+    return iso
+  }
+}
+
+function formatPlanRange(row: PlanningIteration) {
+  const a = row.planned_start_at
+  const b = row.planned_end_at
+  if (!a && !b) return '—'
+  const da = a ? a.slice(0, 10) : '—'
+  const db = b ? b.slice(0, 10) : '—'
+  return `${da} ~ ${db}`
+}
+
+function buildPlanningAiSummaryRows(
+  mode: PlanningAiApplyMode,
+  stats: PlanningAiApplyResultData,
+  completedAtIso: string,
+): AiCompletionSummaryRow[] {
+  const modeLabel = mode === 'replace_all' ? '全部覆盖（重建）' : '增量匹配覆盖'
+  return [
+    { label: '落库模式', value: modeLabel },
+    {
+      label: '新建迭代',
+      value: `${stats.added_iteration_names.length} 个`,
+      lines: stats.added_iteration_names.length ? [...stats.added_iteration_names] : undefined,
+    },
+    {
+      label: '覆盖迭代',
+      value: `${stats.updated_iteration_names.length} 个`,
+      lines: stats.updated_iteration_names.length ? [...stats.updated_iteration_names] : undefined,
+    },
+    {
+      label: '新增 Story',
+      value: `${stats.added_story_titles.length} 条`,
+      lines: stats.added_story_titles.length ? [...stats.added_story_titles] : undefined,
+    },
+    {
+      label: '覆盖 Story',
+      value: `${stats.updated_story_titles.length} 条`,
+      lines: stats.updated_story_titles.length ? [...stats.updated_story_titles] : undefined,
+    },
+    {
+      label: '跳过 Story',
+      value: `${stats.skipped_story_titles.length} 条（无法落库）`,
+      lines: stats.skipped_story_titles.length ? [...stats.skipped_story_titles] : undefined,
+    },
+    { label: '完成时间', value: formatCompletedAt(completedAtIso) },
+  ]
+}
+
+async function confirmPlanningAiMode() {
+  planningAiBaselineLoading.value = true
+  try {
+    planningBaselineForAi.value = await buildPlanningBaselineMarkdown()
+    planningAiApplyMode.value = planningAiModePick.value
+    planningAiModeDialog.value = false
+    aiPlanningOpen.value = true
+  } finally {
+    planningAiBaselineLoading.value = false
+  }
+}
+
+async function onApplyIterationPlanningFromAi(payload: {
+  assistantId: string
+  draft: IterationPlanningDraftNormalized
+}) {
+  if (!projectId.value || !planningAiApplyMode.value) {
+    ElMessage.error('缺少落库模式，请关闭后重新打开 AI 辅助')
+    return
+  }
+  const body: PlanningAiApplyRequestBody = {
+    mode: planningAiApplyMode.value,
+    iterations: payload.draft.iterations,
+    stories: payload.draft.stories,
+  }
+  try {
+    const { data: env } = await apiClient.post<ApiEnvelope<PlanningAiApplyResultData | null>>(
+      `/api/v1/projects/${projectId.value}/planning/ai-apply`,
+      body,
+    )
+    const stats = env.data
+    const modeUsed = planningAiApplyMode.value
+    const completedAt = new Date().toISOString()
+    planningAiApplyMode.value = null
+    if (stats && modeUsed) {
+      planningAiSummaryRows.value = buildPlanningAiSummaryRows(modeUsed, stats, completedAt)
+    } else {
+      planningAiSummaryRows.value = [
+        { label: '状态', value: '已落库，但未返回统计明细' },
+        { label: '完成时间', value: formatCompletedAt(completedAt) },
+      ]
+    }
+    planningAiSummaryVisible.value = true
+    ElMessage.success('已完成')
+    selectedIteration.value = null
+    stories.value = []
+    await loadIterations()
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'response' in e
+        ? String((e as { response?: { data?: { message?: string } } }).response?.data?.message ?? '')
+        : ''
+    ElMessage.error(msg || (e instanceof Error ? e.message : '落库失败'))
+  }
+}
+
+function openIterDialog() {
+  iterForm.value = {
+    name: '',
+    goal_summary: '',
+    scope_notes: '',
+    planned_start_date: null,
+    planned_end_date: null,
+    expected_person_days: null,
+    priority: null,
   }
   iterDialog.value = true
+}
+
+function goIterationDetail(row: PlanningIteration) {
+  if (!projectId.value) return
+  void router.push({
+    name: 'project-m03-iteration-detail',
+    params: { projectId: projectId.value, iterationId: row.id },
+  })
 }
 
 async function saveIteration() {
@@ -411,21 +627,31 @@ async function saveIteration() {
   }
   iterSaving.value = true
   try {
+    const plannedStartAt = iterForm.value.planned_start_date ? `${iterForm.value.planned_start_date}T00:00:00.000Z` : null
+    const plannedEndAt = iterForm.value.planned_end_date ? `${iterForm.value.planned_end_date}T00:00:00.000Z` : null
     const body: PlanningIterationCreateBody = {
       name: iterForm.value.name.trim(),
       goal_summary: iterForm.value.goal_summary.trim(),
       scope_notes: iterForm.value.scope_notes.trim(),
+      planned_start_at: plannedStartAt,
+      planned_end_at: plannedEndAt,
+      expected_person_days: iterForm.value.expected_person_days,
       priority: iterForm.value.priority ?? undefined,
     }
-    if (iterEditId.value) {
-      await apiClient.patch(`/api/v1/projects/${projectId.value}/iterations/${iterEditId.value}`, body)
-      ElMessage.success('已保存')
-    } else {
-      await apiClient.post(`/api/v1/projects/${projectId.value}/iterations`, body)
-      ElMessage.success('已创建')
-    }
+    const { data } = await apiClient.post<ApiEnvelope<PlanningIteration>>(
+      `/api/v1/projects/${projectId.value}/iterations`,
+      body,
+    )
+    const row = data.data
+    ElMessage.success('已创建')
     iterDialog.value = false
     await loadIterations()
+    if (row?.id) {
+      void router.push({
+        name: 'project-m03-iteration-detail',
+        params: { projectId: projectId.value, iterationId: row.id },
+      })
+    }
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
@@ -454,12 +680,11 @@ function openStoryDialog(row?: PlanningStory) {
     storyForm.value = {
       title: row.title,
       acceptance_criteria: row.acceptance_criteria.length ? [...row.acceptance_criteria] : [''],
-      requirement_ref: row.requirement_ref,
       priority: row.priority,
       notes: row.notes,
     }
   } else {
-    storyForm.value = { title: '', acceptance_criteria: [''], requirement_ref: '', priority: 2, notes: '' }
+    storyForm.value = { title: '', acceptance_criteria: [''], priority: 2, notes: '' }
   }
   storyDialog.value = true
 }
@@ -481,7 +706,6 @@ async function saveStory() {
     const body: PlanningStoryCreateBody = {
       title: storyForm.value.title.trim(),
       acceptance_criteria: ac,
-      requirement_ref: storyForm.value.requirement_ref.trim(),
       priority: storyForm.value.priority,
       notes: storyForm.value.notes,
     }
@@ -512,112 +736,26 @@ function confirmDeleteStory(row: PlanningStory) {
     .then(async () => {
       await apiClient.delete(`/api/v1/projects/${projectId.value}/stories/${row.id}`)
       ElMessage.success('已删除')
-      if (selectedStory.value?.id === row.id) selectedStory.value = null
       await loadStories()
     })
     .catch(() => {})
 }
 
-function goTasksForStory(row: PlanningStory) {
-  selectedStory.value = row
-  void loadTasks()
-  const el = document.querySelector('.iteration-planning .block-card:last-of-type')
-  el?.scrollIntoView({ behavior: 'smooth' })
-}
-
-function openTaskDialog(row?: PlanningTask) {
-  if (!selectedStory.value) return
-  taskEditId.value = row?.id ?? null
-  if (row) {
-    taskForm.value = {
-      title: row.title,
-      description: row.description,
-      type_suggestion: row.type_suggestion,
-      priority: row.priority,
-      status: row.status,
-    }
-  } else {
-    taskForm.value = {
-      title: '',
-      description: '',
-      type_suggestion: 'backend',
-      priority: 2,
-      status: 'todo',
-    }
-  }
-  taskDialog.value = true
-}
-
-async function saveTask() {
-  if (!projectId.value || !selectedStory.value) return
-  if (!taskForm.value.title.trim()) {
-    ElMessage.warning('请填写标题')
-    return
-  }
-  taskSaving.value = true
-  try {
-    const body: PlanningTaskCreateBody = {
-      title: taskForm.value.title.trim(),
-      description: taskForm.value.description.trim(),
-      type_suggestion: taskForm.value.type_suggestion,
-      priority: taskForm.value.priority,
-    }
-    if (taskEditId.value) {
-      await apiClient.patch(`/api/v1/projects/${projectId.value}/tasks/${taskEditId.value}`, {
-        ...body,
-        status: taskForm.value.status,
-      })
-      ElMessage.success('已保存')
-    } else {
-      await apiClient.post(`/api/v1/projects/${projectId.value}/stories/${selectedStory.value.id}/tasks`, body)
-      ElMessage.success('已创建')
-    }
-    taskDialog.value = false
-    await loadTasks()
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
-  } finally {
-    taskSaving.value = false
-  }
-}
-
-function confirmDeleteTask(row: PlanningTask) {
+function goStoryDetail(row: PlanningStory) {
   if (!projectId.value) return
-  void ElMessageBox.confirm(`确定删除 Task「${row.title}」？`, '删除 Task', { type: 'warning' })
-    .then(async () => {
-      await apiClient.delete(`/api/v1/projects/${projectId.value}/tasks/${row.id}`)
-      ElMessage.success('已删除')
-      await loadTasks()
-    })
-    .catch(() => {})
+  void router.push({
+    name: 'project-m03-story-detail',
+    params: { projectId: projectId.value, iterationId: row.iteration_id, storyId: row.id },
+  })
 }
 
-function typeLabel(t: PlanningTaskTypeSuggestion) {
-  const m: Record<PlanningTaskTypeSuggestion, string> = {
-    frontend: '前端',
-    backend: '后端',
-    qa: '测试',
-    devops: '运维',
-    other: '其他',
-  }
-  return m[t] ?? t
-}
-
-function statusLabel(s: PlanningTaskStatus) {
-  const m: Record<PlanningTaskStatus, string> = {
-    todo: '待办',
-    in_progress: '进行中',
-    testing: '待测试',
-    done: '已完成',
-  }
-  return m[s]
-}
-
-function statusTagType(s: PlanningTaskStatus) {
-  if (s === 'done') return 'success'
-  if (s === 'in_progress') return 'warning'
-  if (s === 'testing') return 'info'
-  return ''
+function goTasksForStory(row: PlanningStory) {
+  if (!projectId.value) return
+  void router.push({
+    name: 'project-m04-tasks',
+    params: { projectId: projectId.value },
+    query: { story_id: row.id },
+  })
 }
 
 onMounted(() => {
@@ -655,6 +793,53 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mode-hint {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+}
+.mode-radios {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+/* 与 RequirementModuleDocPanel 一致：border 型 el-radio 默认固定高度 + 垂直居中，多行内容会挤出标题错位 */
+.mode-radios :deep(.el-radio) {
+  height: auto;
+  margin-right: 0;
+  align-items: flex-start;
+  padding: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.mode-radios :deep(.el-radio__label) {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.45;
+}
+.mode-option-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.mode-option-desc {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.45;
+  white-space: normal;
+}
+.page-foot-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 .title {
   font-weight: 600;

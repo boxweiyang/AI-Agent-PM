@@ -11,6 +11,7 @@
 | **STRUCTURE.md**（本文） | 目录、工程约定、路径与契约引用。 |
 | **[README.md](../README.md)** | 安装、运行、Node 版本、MSW 与开发习惯。 |
 | **[components/README.md](../src/components/README.md)** | **`src/components/`** 约定：一组件一文件夹、`index.ts`、各组件 **README**。 |
+| **[AiCompletionSummaryDialog/README.md](../src/components/AiCompletionSummaryDialog/README.md)** | **`AiCompletionSummaryDialog`**：AI 批量写库/变更后的**结果摘要弹窗**（与接口管理「生成结果」一致）；**约定**同类完成详情优先用此组件而非长 Toast。 |
 | **[DiffDialog/README.md](../src/components/DiffDialog/README.md)** | 公用 **`DiffDialog`**：双稿左右对照、接受/回退；任意需要做 diff 的页面可复用。 |
 | **[AiAssistDrawer/README.md](../src/components/AiAssistDrawer/README.md)** | **`AiAssistDrawer`**：AI 抽屉 Props、Emits、接入示例与 `invoke` 约定（内嵌 **`DiffDialog`**）。 |
 
@@ -53,6 +54,7 @@
 | `src/utils/techDeliveryPartsNormalize.ts` | **`TechDeliveryPart[]`** JSON 规范化 + **选型表文本化**（技术选型 diff / MSW） |
 | `src/utils/inlineTextDiff.ts` | **`DiffDialog`** 中「修改」行的 **字词/字符级** 片段（`diff`：`diffChars` / `diffWordsWithSpace`） |
 | `src/utils/aiAssistDiffGrid.ts` | 行级 LCS 网格数据，供 **`DiffDialog`** 渲染 |
+| `src/components/AiCompletionSummaryDialog/` | AI **完成结果**摘要弹窗；**`ApiCatalogPage`**、**`IterationPlanningPage`** 等接入 |
 | `src/components/DiffDialog/` | 公用 **差异弹窗**（`index.ts` 默认导出）；**`AiAssistDrawer`** 等调用方按需传入表头与文案 |
 | `src/components/AiAssistDrawer/` | AI 抽屉 + **README**；`index.ts` 仅默认导出抽屉；diff UI 使用 **`DiffDialog`** |
 | `diff`（`package.json`） | 行内文本对比（`inlineTextDiff`） |

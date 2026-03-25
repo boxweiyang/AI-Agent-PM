@@ -572,6 +572,84 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
+    patch:
+      tags: [tech-design-doc]
+      summary: 覆盖技术设计当前最新版本正文
+      operationId: patchTechDesignDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "400":
+          description: 非最新版本禁止覆盖
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+    delete:
+      tags: [tech-design-doc]
+      summary: 删除技术设计指定版本
+      operationId: deleteTechDesignDocVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+        "401":
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+        "404":
+          description: 版本不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
   /api/v1/projects/{projectId}/tech-design-doc/modules:
     get:
       tags: [tech-design-doc]
@@ -770,85 +848,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
-    patch:
-      tags: [tech-design-doc]
-      summary: 覆盖技术设计当前最新版本正文
-      operationId: patchTechDesignDocVersion
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: versionId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
-      responses:
-        "200":
-          description: 成功
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
-        "401":
-          description: 未登录
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EnvelopeBase"
-        "400":
-          description: 非最新版本禁止覆盖
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EnvelopeBase"
-    delete:
-      tags: [tech-design-doc]
-      summary: 删除技术设计指定版本
-      operationId: deleteTechDesignDocVersion
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: versionId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: 成功
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
-        "401":
-          description: 未登录
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EnvelopeBase"
-        "404":
-          description: 版本不存在
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EnvelopeBase"
-
   /api/v1/projects/{projectId}/requirement-doc/modules:
     get:
       tags: [requirement-doc]
@@ -1608,6 +1607,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
 
+  /api/v1/projects/{projectId}/planning/ai-apply:
+    post:
+      tags: [planning]
+      summary: 应用 AI 迭代规划草案（全量覆盖或增量合并）
+      description: |
+        mode=`replace_all` 时清空项目下既有迭代（级联 Story/Task）后按草案重建；
+        mode=`incremental` 时与「需求模块 AI 拆分」的增量策略一致：迭代按**规范化名称**匹配，已存在则**复用且不修改**该迭代字段；Story 在所属迭代下按**规范化标题**比对，已存在则**跳过**，否则新增。
+      operationId: applyPlanningAiDraft
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningAiApplyBody"
+      responses:
+        "200":
+          description: 成功或业务错误（见 Envelope code）；成功时 data 含本次新增/复用/跳过统计
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningAiApply"
+
   /api/v1/projects/{projectId}/iterations/{iterationId}:
     get:
       tags: [planning]
@@ -1678,6 +1705,272 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/iterations/{iterationId}/requirement-doc/versions:
+    get:
+      tags: [planning]
+      summary: 迭代需求文档 — 版本列表（结构与项目需求文档版本列表相同）
+      operationId: listIterationRequirementDocVersions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+    post:
+      tags: [planning]
+      summary: 创建迭代需求文档版本或从最新追加（请求体同项目需求文档版本）
+      operationId: postIterationRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionCreateOrAppend"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+
+  /api/v1/projects/{projectId}/iterations/{iterationId}/requirement-doc/versions/{versionId}:
+    get:
+      tags: [planning]
+      summary: 迭代需求文档 — 指定版本详情
+      operationId: getIterationRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+    patch:
+      tags: [planning]
+      summary: 覆盖迭代需求文档当前最新版本正文
+      operationId: patchIterationRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+    delete:
+      tags: [planning]
+      summary: 删除迭代需求文档某一版本
+      operationId: deleteIterationRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: iterationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+
+  /api/v1/projects/{projectId}/stories/{storyId}/requirement-doc/versions:
+    get:
+      tags: [planning]
+      summary: Story 需求文档 — 版本列表（结构与项目需求文档版本列表相同）
+      operationId: listStoryRequirementDocVersions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
+    post:
+      tags: [planning]
+      summary: 创建 Story 需求文档版本或从最新追加（请求体同项目需求文档版本）
+      operationId: postStoryRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionCreateOrAppend"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+
+  /api/v1/projects/{projectId}/stories/{storyId}/requirement-doc/versions/{versionId}:
+    get:
+      tags: [planning]
+      summary: Story 需求文档 — 指定版本详情
+      operationId: getStoryRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+    patch:
+      tags: [planning]
+      summary: 覆盖 Story 需求文档当前最新版本正文
+      operationId: patchStoryRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementDocVersionPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionDetail"
+    delete:
+      tags: [planning]
+      summary: 删除 Story 需求文档某一版本
+      operationId: deleteStoryRequirementDocVersion
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRequirementDocVersionList"
 
   /api/v1/projects/{projectId}/iterations/{iterationId}/stories:
     get:
@@ -1932,6 +2225,11 @@ paths:
           required: false
           schema: { type: string }
           description: 筛选「绑定到某接口」的 Task（用于 M02C 跳转）
+        - name: type_suggestion
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/PlanningTaskTypeSuggestion" }
+          description: 按类型建议筛选（M04）
       responses:
         "200":
           description: 成功
@@ -2246,7 +2544,7 @@ components:
             `api_service` | `ops_tool` | `other`
         custom_label:
           type: string
-          description: `delivery_kind=other` 时的展示名，或其它情况下可选备注名
+          description: "`delivery_kind=other` 时的展示名，或其它情况下可选备注名"
         technologies:
           type: string
           description: 该部分采用的主要技术 / 框架（可多值，顿号或换行分隔）
@@ -3102,6 +3400,7 @@ components:
         goal_summary: { type: string }
         planned_start_at: { type: string, format: date-time, nullable: true }
         planned_end_at: { type: string, format: date-time, nullable: true }
+        expected_person_days: { type: number, nullable: true, description: 预期工作量（人天） }
         scope_notes: { type: string, description: 关联需求模块、交付物等说明 }
         sort_order: { type: integer }
         priority:
@@ -3119,6 +3418,7 @@ components:
         goal_summary: { type: string }
         planned_start_at: { type: string, format: date-time, nullable: true }
         planned_end_at: { type: string, format: date-time, nullable: true }
+        expected_person_days: { type: number, nullable: true }
         scope_notes: { type: string }
         priority: { $ref: "#/components/schemas/PlanningPriority" }
 
@@ -3129,6 +3429,7 @@ components:
         goal_summary: { type: string }
         planned_start_at: { type: string, format: date-time, nullable: true }
         planned_end_at: { type: string, format: date-time, nullable: true }
+        expected_person_days: { type: number, nullable: true }
         scope_notes: { type: string }
         sort_order: { type: integer }
         priority: { $ref: "#/components/schemas/PlanningPriority" }
@@ -3162,6 +3463,75 @@ components:
         ordered_ids:
           type: array
           items: { type: string }
+
+    PlanningAiApplyMode:
+      type: string
+      enum: [replace_all, incremental]
+      description: replace_all=清空后重建；incremental=按规范化名称匹配，已有迭代/Story 则用草案 **整字段覆盖**
+
+    PlanningAiDraftIterationInput:
+      type: object
+      required: [name, goal_summary]
+      properties:
+        name: { type: string }
+        goal_summary: { type: string }
+        scope_notes: { type: string }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        sort_order: { type: integer }
+
+    PlanningAiDraftStoryInput:
+      type: object
+      required: [iteration_index, title, acceptance_criteria]
+      properties:
+        iteration_index: { type: integer, minimum: 0, description: 对应草案 iterations 数组下标 }
+        title: { type: string }
+        acceptance_criteria:
+          type: array
+          items: { type: string }
+        requirement_ref: { type: string }
+        priority: { $ref: "#/components/schemas/PlanningPriority" }
+        sort_order: { type: integer }
+        notes: { type: string }
+
+    PlanningAiApplyBody:
+      type: object
+      required: [mode, iterations, stories]
+      properties:
+        mode: { $ref: "#/components/schemas/PlanningAiApplyMode" }
+        iterations:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningAiDraftIterationInput" }
+        stories:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningAiDraftStoryInput" }
+
+    PlanningAiApplyResultData:
+      type: object
+      properties:
+        added_iteration_names:
+          type: array
+          items: { type: string }
+        updated_iteration_names:
+          type: array
+          items: { type: string }
+        added_story_titles:
+          type: array
+          items: { type: string }
+        updated_story_titles:
+          type: array
+          items: { type: string }
+        skipped_story_titles:
+          type: array
+          items: { type: string }
+
+    EnvelopePlanningAiApply:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data:
+              nullable: true
+              $ref: "#/components/schemas/PlanningAiApplyResultData"
 
     PlanningStory:
       type: object
