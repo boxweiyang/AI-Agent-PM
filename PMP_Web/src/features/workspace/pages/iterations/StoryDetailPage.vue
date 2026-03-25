@@ -12,7 +12,7 @@
       <el-card shadow="never">
         <el-result icon="folder-opened" title="尚未解锁迭代模块" :sub-title="subTitlePending">
           <template #extra>
-            <el-button @click="goIterationDetail">返回迭代详情</el-button>
+            <el-button @click="goBackToIterationPlanning">返回迭代与 Story</el-button>
           </template>
         </el-result>
       </el-card>
@@ -20,7 +20,7 @@
 
     <el-card v-else-if="ready && !story && !pageLoading" shadow="never">
       <el-empty description="未找到该 Story 或已删除">
-        <el-button type="primary" @click="goIterationDetail">返回迭代详情</el-button>
+        <el-button type="primary" @click="goBackToIterationPlanning">返回迭代与 Story</el-button>
       </el-empty>
     </el-card>
 
@@ -29,7 +29,7 @@
         <template #header>
           <div class="head-row">
             <div class="head-left">
-              <el-button text @click="goIterationDetail">返回迭代详情</el-button>
+              <el-button text @click="goBackToIterationPlanning">返回迭代与 Story</el-button>
               <span class="title">Story 详情 · {{ story.title }}</span>
               <el-tag size="small" type="info">优先级 {{ story.priority ?? '—' }}</el-tag>
             </div>
@@ -301,13 +301,13 @@ function formatTime(iso: string) {
   }
 }
 
-function goIterationDetail() {
-  if (projectId.value && iterationId.value) {
-    void router.push({
-      name: 'project-m03-iteration-detail',
-      params: { projectId: projectId.value, iterationId: iterationId.value },
-    })
-  }
+function goBackToIterationPlanning() {
+  if (!projectId.value) return
+  void router.push({
+    name: 'project-m03-iterations',
+    params: { projectId: projectId.value },
+    query: { iteration_id: iterationId.value, story_id: storyId.value },
+  })
 }
 
 async function fetchProject() {
@@ -543,7 +543,7 @@ function confirmDeleteStory() {
     .then(async () => {
       await apiClient.delete(`/api/v1/projects/${pid}/stories/${sid}`)
       ElMessage.success('已删除')
-      goIterationDetail()
+      goBackToIterationPlanning()
     })
     .catch(() => {})
 }

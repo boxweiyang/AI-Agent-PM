@@ -27,6 +27,7 @@
         :data="iterations"
         row-key="id"
         highlight-current-row
+        ref="iterTableRef"
         @current-change="onSelectIteration"
       >
         <el-table-column prop="name" label="迭代名称" min-width="160" />
@@ -56,7 +57,7 @@
       </el-table>
     </el-card>
 
-    <el-card v-if="selectedIteration" shadow="never" class="block-card">
+    <el-card v-if="selectedIteration" ref="storyCardRef" shadow="never" class="block-card">
       <template #header>
         <div class="head-row">
           <span class="title">Story · {{ selectedIteration.name }}</span>
@@ -233,7 +234,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -287,7 +288,33 @@ async function fetchProject() {
 
 const iterations = ref<PlanningIteration[]>([])
 const iterLoading = ref(false)
+const iterTableRef = ref<any>(null)
 const selectedIteration = ref<PlanningIteration | null>(null)
+const storyCardRef = ref<any>(null)
+
+const routeIterationId = computed(() => {
+  const raw = route.query.iteration_id
+  return typeof raw === 'string' ? raw : ''
+})
+
+async function syncIterationSelectionFromQuery() {
+  if (!routeIterationId.value) return
+  const target = iterations.value.find((x) => x.id === routeIterationId.value) ?? null
+  if (!target) return
+  selectedIteration.value = target
+  await nextTick()
+  // Element Plus 表格 current-row 需要通过 setCurrentRow 手动同步，才能保持选中态一致。
+  iterTableRef.value?.setCurrentRow?.(target)
+  // 回到列表页时，自动滚动到 Story 区块，让用户立刻看到对应迭代的 Story 列表。
+  const el = storyCardRef.value?.$el as HTMLElement | undefined
+  if (el && typeof el.scrollIntoView === 'function') {
+    try {
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    } catch {
+      el.scrollIntoView()
+    }
+  }
+}
 
 const stories = ref<PlanningStory[]>([])
 const storyLoading = ref(false)
@@ -380,7 +407,9 @@ async function loadIterations() {
       `/api/v1/projects/${projectId.value}/iterations`,
     )
     iterations.value = data.data?.items ?? []
-    if (selectedIteration.value) {
+    if (routeIterationId.value) {
+      await syncIterationSelectionFromQuery()
+    } else if (selectedIteration.value) {
       const cur = iterations.value.find((x) => x.id === selectedIteration.value!.id)
       selectedIteration.value = cur ?? null
     }
@@ -450,6 +479,14 @@ watch(
     tasksForIteration.value = []
     void fetchProject()
     void loadIterations()
+  },
+)
+
+watch(
+  () => routeIterationId.value,
+  () => {
+    if (!iterations.value.length) return
+    void syncIterationSelectionFromQuery()
   },
 )
 
