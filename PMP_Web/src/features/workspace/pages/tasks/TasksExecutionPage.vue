@@ -14,124 +14,165 @@
       </template>
     </el-alert>
 
-    <div class="filter-cards">
-      <el-card shadow="never" class="block-card filter-card">
+    <div class="tasks-layout">
+      <el-card shadow="never" class="tree-card">
         <template #header>
-          <span class="card-title">选择迭代</span>
+          <div class="tree-head">
+            <span class="tree-title">迭代 / Story</span>
+            <div class="tree-actions">
+              <el-button size="small" :disabled="!selectedIterationId && !selectedStoryId" @click="clearSelection">
+                全部
+              </el-button>
+            </div>
+          </div>
         </template>
-        <el-select
-          v-model="iterationFilter"
-          clearable
-          placeholder="选择迭代"
-          style="width: 100%"
-          filterable
-        >
-          <el-option v-for="it in iterationsList" :key="it.id" :label="it.name" :value="it.id" />
-        </el-select>
-      </el-card>
 
-      <el-card shadow="never" class="block-card filter-card">
-        <template #header>
-          <span class="card-title">选择 Story</span>
-        </template>
-        <el-select v-model="storyFilter" clearable placeholder="选择 Story" style="width: 100%" filterable>
-          <el-option v-for="s in storySelectOptions" :key="s.id" :label="s.label" :value="s.id" />
-        </el-select>
-      </el-card>
+        <el-scrollbar class="tree-scroll">
+          <el-empty v-if="!iterationsList.length" description="暂无迭代与 Story" />
+          <div v-else class="tree-root">
+            <div v-for="it in iterationsList" :key="it.id" class="iter-group">
+              <div class="iter-row" :class="{ 'is-selected': selectedIterationId === it.id }">
+                <div class="iter-left" @click="onSelectIteration(it.id)">
+                  <el-icon class="caret-icon" @click.stop="toggleIterationExpanded(it.id)">
+                    <ArrowDown v-if="isIterationExpanded(it.id)" />
+                    <ArrowRight v-else />
+                  </el-icon>
+                  <span class="iter-title">{{ it.name }}</span>
+                </div>
+                <div class="iter-right">
+                  <el-tooltip :content="`查看迭代「${it.name}」最新版需求文档`" placement="right">
+                    <el-button
+                      class="eye-btn"
+                      link
+                      type="primary"
+                      size="small"
+                      :aria-label="`查看迭代 ${it.name} 最新版需求文档`"
+                      @click.stop="openIterationLatestReqDoc(it.id)"
+                    >
+                      <el-icon><View /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+              </div>
 
-      <el-card shadow="never" class="block-card filter-card">
-        <template #header>
-          <span class="card-title">查看最新版需求文档</span>
-        </template>
-        <div class="doc-card-actions">
-          <el-button type="primary" plain :disabled="!iterationFilter" @click="openIterationLatestReqDoc">
-            查看迭代最新版
-          </el-button>
-          <el-button type="primary" plain :disabled="!storyFilter" @click="openStoryLatestReqDoc">
-            查看 Story 最新版
+              <div v-if="isIterationExpanded(it.id)" class="story-rows">
+                <div
+                  v-for="s in storiesByIteration[it.id] || []"
+                  :key="s.id"
+                  class="story-row"
+                  :class="{ 'is-selected': selectedStoryId === s.id }"
+                  @click="onSelectStory(s.id)"
+                >
+                  <span class="story-title">{{ s.title }}</span>
+                  <div class="story-right">
+                    <el-tooltip :content="`查看 Story「${s.title}」最新版需求文档`" placement="right">
+                      <el-button
+                        class="eye-btn"
+                        link
+                        type="primary"
+                        size="small"
+                        :aria-label="`查看 Story ${s.title} 最新版需求文档`"
+                        @click.stop="openStoryLatestReqDoc(s.id)"
+                      >
+                        <el-icon><View /></el-icon>
+                      </el-button>
+                    </el-tooltip>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </el-scrollbar>
+
+        <div class="tree-footer">
+          <el-button type="primary" class="tree-manage-btn" @click="goToIterationPlanning">
+            管理迭代 / Story
           </el-button>
         </div>
-        <p class="doc-card-hint">
-          读取对应迭代/Story 的最新版本正文，只用于预览。
-        </p>
+      </el-card>
+
+      <el-card shadow="never" class="table-card">
+        <template #header>
+          <div class="head-row">
+            <el-button
+              v-if="showBackToStory"
+              type="primary"
+              size="small"
+              @click="goBackToPrevious"
+            >
+              返回story列表
+            </el-button>
+            <span class="title">Task 与执行</span>
+            <div class="tools">
+              <el-select v-model="statusFilter" clearable placeholder="状态" style="width: 120px">
+                <el-option label="待办" value="todo" />
+                <el-option label="进行中" value="in_progress" />
+                <el-option label="待测试" value="testing" />
+                <el-option label="已完成" value="done" />
+              </el-select>
+              <el-select v-model="typeFilter" clearable placeholder="类型" style="width: 120px">
+                <el-option label="前端" value="frontend" />
+                <el-option label="后端" value="backend" />
+                <el-option label="测试" value="qa" />
+                <el-option label="运维" value="devops" />
+                <el-option label="其他" value="other" />
+              </el-select>
+              <el-button @click="loadAll">刷新</el-button>
+            </div>
+          </div>
+        </template>
+
+        <div class="table-scroll">
+          <el-table v-loading="loading" :data="displayTasks" row-key="id" stripe>
+            <el-table-column prop="title" label="Task" min-width="200" />
+            <el-table-column label="迭代" width="140" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ storyContext.get(row.story_id)?.iterationName ?? row.iteration_id }}
+              </template>
+            </el-table-column>
+            <el-table-column label="Story" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ storyContext.get(row.story_id)?.title ?? row.story_id }}</template>
+            </el-table-column>
+            <el-table-column label="类型" width="88">
+              <template #default="{ row }">{{ typeLabel(row.type_suggestion) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-select
+                  :model-value="row.status"
+                  size="small"
+                  style="width: 100%"
+                  @change="(v) => onStatusChange(row, v)"
+                >
+                  <el-option label="待办" value="todo" />
+                  <el-option label="进行中" value="in_progress" />
+                  <el-option label="待测试" value="testing" />
+                  <el-option label="已完成" value="done" />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="关联接口" width="96">
+              <template #default="{ row }">{{ (row.linked_endpoint_ids || []).length }}</template>
+            </el-table-column>
+            <el-table-column label="高亮" width="72">
+              <template #default="{ row }">
+                <el-tag v-if="highlightTaskId === row.id" size="small" type="warning">定位</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <p class="hint">
+            通过左侧树选择迭代/Story 过滤 Task；点击每个节点右侧眼睛图标可预览该节点的最新需求文档（只读）。
+          </p>
+        </div>
       </el-card>
     </div>
-
-    <el-card shadow="never" class="block-card">
-      <template #header>
-        <div class="head-row">
-          <el-button
-            v-if="showBackToStory"
-            type="primary"
-            size="small"
-            @click="goBackToPrevious"
-          >
-            返回story列表
-          </el-button>
-          <span class="title">Task 与执行</span>
-          <div class="tools">
-            <el-select v-model="statusFilter" clearable placeholder="状态" style="width: 120px">
-              <el-option label="待办" value="todo" />
-              <el-option label="进行中" value="in_progress" />
-              <el-option label="待测试" value="testing" />
-              <el-option label="已完成" value="done" />
-            </el-select>
-            <el-select v-model="typeFilter" clearable placeholder="类型" style="width: 120px">
-              <el-option label="前端" value="frontend" />
-              <el-option label="后端" value="backend" />
-              <el-option label="测试" value="qa" />
-              <el-option label="运维" value="devops" />
-              <el-option label="其他" value="other" />
-            </el-select>
-            <el-button @click="loadAll">刷新</el-button>
-          </div>
-        </div>
-      </template>
-
-      <el-table v-loading="loading" :data="displayTasks" row-key="id" stripe>
-        <el-table-column prop="title" label="Task" min-width="200" />
-        <el-table-column label="迭代" width="140" show-overflow-tooltip>
-          <template #default="{ row }">{{ storyContext.get(row.story_id)?.iterationName ?? row.iteration_id }}</template>
-        </el-table-column>
-        <el-table-column label="Story" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ storyContext.get(row.story_id)?.title ?? row.story_id }}</template>
-        </el-table-column>
-        <el-table-column label="类型" width="88">
-          <template #default="{ row }">{{ typeLabel(row.type_suggestion) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-select
-              :model-value="row.status"
-              size="small"
-              style="width: 100%"
-              @change="(v) => onStatusChange(row, v)"
-            >
-              <el-option label="待办" value="todo" />
-              <el-option label="进行中" value="in_progress" />
-              <el-option label="待测试" value="testing" />
-              <el-option label="已完成" value="done" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="关联接口" width="96">
-          <template #default="{ row }">{{ (row.linked_endpoint_ids || []).length }}</template>
-        </el-table-column>
-        <el-table-column label="高亮" width="72">
-          <template #default="{ row }">
-            <el-tag v-if="highlightTaskId === row.id" size="small" type="warning">定位</el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
-      <p class="hint">
-        Task 在「迭代与 Story」页从 Story 跳转可带 <code>story_id</code> 筛选；此处调整执行状态。状态为「已完成」且已绑定接口时，将按类型回写接口管理中的前端/后端/测试完成态（Mock）。
-      </p>
-    </el-card>
 
     <el-dialog
       v-model="docDialogVisible"
       :title="docDialogTitle"
       width="860px"
+      class="pmp-viewport-dialog"
       destroy-on-close
     >
       <template #default>
@@ -151,6 +192,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { ArrowDown, ArrowRight, View } from '@element-plus/icons-vue'
 
 import { apiClient } from '@/api/client'
 import type {
@@ -177,8 +219,12 @@ const storyContext = ref(
 )
 const iterationsList = ref<PlanningIteration[]>([])
 const allStories = ref<PlanningStory[]>([])
-const iterationFilter = ref('')
-const storyFilter = ref('')
+const storiesByIteration = ref<Record<string, PlanningStory[]>>({})
+const selectedIterationId = ref<string>('')
+const selectedStoryId = ref<string>('')
+const expandedIterationIds = ref<Set<string>>(new Set())
+// 防止路由 query（如来自 Story 页的 story_id/iteration_id）在用户点击树之后反复覆盖选择
+const userSelectionDirty = ref(false)
 const statusFilter = ref<PlanningTaskStatus | ''>('')
 const typeFilter = ref<PlanningTaskTypeSuggestion | ''>('')
 
@@ -218,6 +264,10 @@ function storyTitleById(id: string) {
   return storyContext.value.get(id)?.title ?? id
 }
 
+function isIterationExpanded(iterationId: string): boolean {
+  return expandedIterationIds.value.has(iterationId)
+}
+
 async function fetchLatestIterationReqDoc(iterationId: string): Promise<RequirementDocVersionDetail | null> {
   const pid = projectId.value
   if (!pid) return null
@@ -254,8 +304,7 @@ async function fetchLatestStoryReqDoc(storyId: string): Promise<RequirementDocVe
   }
 }
 
-async function openIterationLatestReqDoc() {
-  const iid = iterationFilter.value
+async function openIterationLatestReqDoc(iid: string) {
   if (!projectId.value || !iid) return
 
   docDialogKind.value = 'iteration'
@@ -277,8 +326,7 @@ async function openIterationLatestReqDoc() {
   docDialogLoading.value = false
 }
 
-async function openStoryLatestReqDoc() {
-  const sid = storyFilter.value
+async function openStoryLatestReqDoc(sid: string) {
   if (!projectId.value || !sid) return
 
   docDialogKind.value = 'story'
@@ -310,12 +358,51 @@ function goBackToPrevious() {
   if (projectId.value) void router.push({ name: 'project-m03-iterations', params: { projectId: projectId.value } })
 }
 
-const storySelectOptions = computed(() => {
-  const iter = iterationFilter.value
-  let list = allStories.value
-  if (iter) list = list.filter((s) => s.iteration_id === iter)
-  return list.map((s) => ({ id: s.id, label: s.title }))
-})
+function goToIterationPlanning() {
+  if (!projectId.value) return
+  void router.push({ name: 'project-m03-iterations', params: { projectId: projectId.value } })
+}
+
+function toggleIterationExpanded(iterationId: string) {
+  const next = new Set(expandedIterationIds.value)
+  if (next.has(iterationId)) next.delete(iterationId)
+  else next.add(iterationId)
+  expandedIterationIds.value = next
+}
+
+function onSelectIteration(iterationId: string) {
+  userSelectionDirty.value = true
+  selectedIterationId.value = iterationId
+  selectedStoryId.value = ''
+
+  const next = new Set(expandedIterationIds.value)
+  next.add(iterationId)
+  expandedIterationIds.value = next
+
+  void loadAll()
+}
+
+function onSelectStory(storyId: string) {
+  userSelectionDirty.value = true
+  selectedStoryId.value = storyId
+  selectedIterationId.value = ''
+
+  const st = allStories.value.find((s) => s.id === storyId)
+  const iid = st?.iteration_id
+
+  const next = new Set(expandedIterationIds.value)
+  if (iid) next.add(iid)
+  expandedIterationIds.value = next
+
+  void loadAll()
+}
+
+function clearSelection() {
+  userSelectionDirty.value = true
+  selectedIterationId.value = ''
+  selectedStoryId.value = ''
+  void loadAll()
+}
 
 const displayTasks = computed(() => {
   let list = tasks.value
@@ -335,66 +422,68 @@ async function loadFilterCatalog() {
     const iters = data.data?.items ?? []
     iterationsList.value = iters
     const acc: PlanningStory[] = []
+    const byIter: Record<string, PlanningStory[]> = {}
     await Promise.all(
       iters.map(async (it) => {
         const { data: sd } = await apiClient.get<ApiEnvelope<{ items: PlanningStory[] }>>(
           `/api/v1/projects/${projectId.value}/iterations/${it.id}/stories`,
         )
-        acc.push(...(sd.data?.items ?? []))
+        const sList = sd.data?.items ?? []
+        byIter[it.id] = sList
+        acc.push(...sList)
       }),
     )
     allStories.value = acc
+    storiesByIteration.value = byIter
   } catch {
     iterationsList.value = []
     allStories.value = []
+    storiesByIteration.value = {}
   }
 }
 
-function applyRouteQueryToFilters() {
+function applyRouteQueryToSeeds() {
+  const ts = route.query.type_suggestion
+  if (typeof ts === 'string' && ts) {
+    if (!typeFilter.value) typeFilter.value = ts as PlanningTaskTypeSuggestion
+  }
+
   const sid = route.query.story_id
   if (typeof sid === 'string' && sid) {
-    storyFilter.value = sid
+    if (userSelectionDirty.value) return
+    selectedStoryId.value = sid
+    selectedIterationId.value = ''
+
     const st = allStories.value.find((s) => s.id === sid)
-    if (st) iterationFilter.value = st.iteration_id
+    const iid = st?.iteration_id
+    if (iid) {
+      const next = new Set(expandedIterationIds.value)
+      next.add(iid)
+      expandedIterationIds.value = next
+    }
     return
   }
+
   const iid = route.query.iteration_id
   if (typeof iid === 'string' && iid) {
-    iterationFilter.value = iid
+    if (userSelectionDirty.value) return
+    selectedIterationId.value = iid
+    selectedStoryId.value = ''
+
+    const next = new Set(expandedIterationIds.value)
+    next.add(iid)
+    expandedIterationIds.value = next
   }
 }
 
-function syncFiltersToRoute() {
-  if (!projectId.value) return
-  const q: Record<string, string> = {}
-  if (apiEndpointFilter.value) q.api_endpoint_id = apiEndpointFilter.value
-  if (iterationFilter.value) q.iteration_id = iterationFilter.value
-  if (storyFilter.value) q.story_id = storyFilter.value
-  const ht = route.query.highlight_task_id
-  if (typeof ht === 'string' && ht) q.highlight_task_id = ht
-  void router.replace({ name: 'project-m04-tasks', params: { projectId: projectId.value }, query: q })
-}
-
-async function buildStoryContext() {
-  if (!projectId.value) return
+function buildStoryContextFromLoadedData() {
+  const iterNameMap = new Map(iterationsList.value.map((it) => [it.id, it.name]))
   const ctx = new Map<string, { title: string; iterationName: string }>()
-  try {
-    const { data } = await apiClient.get<ApiEnvelope<{ items: PlanningIteration[] }>>(
-      `/api/v1/projects/${projectId.value}/iterations`,
-    )
-    const iters = data.data?.items ?? []
-    await Promise.all(
-      iters.map(async (it) => {
-        const { data: sd } = await apiClient.get<ApiEnvelope<{ items: PlanningStory[] }>>(
-          `/api/v1/projects/${projectId.value}/iterations/${it.id}/stories`,
-        )
-        for (const s of sd.data?.items ?? []) {
-          ctx.set(s.id, { title: s.title, iterationName: it.name })
-        }
-      }),
-    )
-  } catch {
-    /* ignore */
+  for (const s of allStories.value) {
+    ctx.set(s.id, {
+      title: s.title,
+      iterationName: iterNameMap.get(s.iteration_id) ?? s.iteration_id,
+    })
   }
   storyContext.value = ctx
 }
@@ -404,17 +493,17 @@ async function loadAll() {
   loading.value = true
   try {
     await loadFilterCatalog()
-    applyRouteQueryToFilters()
+    applyRouteQueryToSeeds()
     const q = new URLSearchParams()
     if (apiEndpointFilter.value) q.set('api_endpoint_id', apiEndpointFilter.value)
-    if (iterationFilter.value) q.set('iteration_id', iterationFilter.value)
-    if (storyFilter.value) q.set('story_id', storyFilter.value)
     if (typeFilter.value) q.set('type_suggestion', typeFilter.value)
+    if (selectedStoryId.value) q.set('story_id', selectedStoryId.value)
+    else if (selectedIterationId.value) q.set('iteration_id', selectedIterationId.value)
     const path =
       `/api/v1/projects/${projectId.value}/tasks` + (q.toString() ? `?${q.toString()}` : '')
     const { data } = await apiClient.get<ApiEnvelope<{ items: PlanningTask[] }>>(path)
     tasks.value = data.data?.items ?? []
-    await buildStoryContext()
+    buildStoryContextFromLoadedData()
   } catch {
     tasks.value = []
     ElMessage.error('加载 Task 失败')
@@ -465,11 +554,11 @@ function goApiCatalog() {
 
 function clearEndpointFilter() {
   const q: Record<string, string> = {}
-  if (iterationFilter.value) q.iteration_id = iterationFilter.value
-  if (storyFilter.value) q.story_id = storyFilter.value
   if (typeFilter.value) q.type_suggestion = typeFilter.value
   const ht = route.query.highlight_task_id
   if (typeof ht === 'string' && ht) q.highlight_task_id = ht
+  if (selectedStoryId.value) q.story_id = selectedStoryId.value
+  else if (selectedIterationId.value) q.iteration_id = selectedIterationId.value
   void router.replace({
     name: 'project-m04-tasks',
     params: { projectId: projectId.value },
@@ -477,22 +566,23 @@ function clearEndpointFilter() {
   })
 }
 
-watch(iterationFilter, (next) => {
-  if (!storyFilter.value) return
-  const st = allStories.value.find((s) => s.id === storyFilter.value)
-  if (!st || (next && st.iteration_id !== next)) storyFilter.value = ''
-})
-
-watch([iterationFilter, storyFilter, typeFilter], () => {
-  syncFiltersToRoute()
-})
-
 watch(
-  () => [route.query.api_endpoint_id, route.query.story_id, route.query.iteration_id, projectId.value],
+  () =>
+    [
+      route.query.api_endpoint_id,
+      route.query.story_id,
+      route.query.iteration_id,
+      route.query.type_suggestion,
+      projectId.value,
+    ],
   () => {
     void loadAll()
   },
 )
+
+watch(typeFilter, () => {
+  void loadAll()
+})
 
 onMounted(() => {
   void loadAll()
@@ -501,37 +591,151 @@ onMounted(() => {
 
 <style scoped>
 .tasks-exec {
-  padding: 0 0 24px;
+  padding: 0;
+  /* el-main 在 ProjectLayout 中上下 padding 为 16px，顶部 AppHeaderBar 为 48px */
+  height: calc(100vh - 80px);
+  min-height: calc(100vh - 80px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .filter-alert {
   margin-bottom: 16px;
 }
-.filter-cards {
+.tasks-layout {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 0 0 16px;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
 }
-.filter-card {
-  min-width: 260px;
+.tree-card {
+  width: 340px;
+  flex: 0 0 340px;
+  height: 100%;
+  font-size: 13px;
+}
+.table-card {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+/* 让两张卡片内部 body 变成 flex 纵向布局，确保滚动只发生在标题下方 */
+.tree-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   flex: 1;
 }
-.card-title {
+
+.table-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tree-title {
   font-weight: 600;
 }
-.doc-card-actions {
+.tree-actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
-.doc-card-hint {
-  margin: 10px 0 0;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.5;
+.tree-scroll {
+  flex: 1;
+  min-height: 0;
+  padding-right: 8px;
+  height: 100%;
 }
-.block-card {
-  border-radius: 8px;
+.tree-scroll :deep(.el-scrollbar__wrap) {
+  height: 100%;
+}
+.tree-root {
+  padding: 2px 2px 6px;
+}
+
+.tree-footer {
+  padding: 10px 10px 14px;
+  flex-shrink: 0;
+}
+
+.tree-manage-btn {
+  width: 100%;
+}
+.iter-group + .iter-group {
+  margin-top: 12px;
+}
+.iter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+.iter-title {
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+.story-rows {
+  margin: 8px 0 0;
+  padding-left: 12px;
+  border-left: 1px dashed var(--el-border-color-lighter);
+}
+.story-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.iter-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.caret-icon {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.story-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.story-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.iter-row.is-selected,
+.story-row.is-selected {
+  background: var(--el-fill-color-light);
+}
+.eye-btn {
+  flex-shrink: 0;
+  padding: 0;
 }
 .head-row {
   display: flex;
@@ -552,6 +756,19 @@ onMounted(() => {
   margin: 12px 0 0;
   font-size: 13px;
   color: var(--el-text-color-secondary);
+}
+
+.table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.table-scroll :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
 }
 .doc-meta-alert {
   margin-bottom: 12px;
