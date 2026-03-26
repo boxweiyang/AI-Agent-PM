@@ -1,0 +1,24 @@
+---
+description: 新增 MSW Mock 接口时必须同步更新 OpenAPI 契约（路径、入参、出参、功能说明）
+alwaysApply: true
+---
+
+# Mock 接口与 OpenAPI 同步（强制）
+
+在 **`PMP_Web/src/mocks/handlers.ts`**（或其它 Mock 定义处）**新增或变更** HTTP 接口时，**同一提交/同一 PR** 内必须在 **`contracts/openapi/openapi.yaml`** 中补齐或更新对应路径，使后端可仅凭契约实现，无需额外对齐会议。
+
+## 契约中必须写清
+
+- **调用路径**：`method` + `path`（含 path 参数名）
+- **功能说明**：`summary` + 必要时 `description`（业务语义、幂等、鉴权前提等）
+- **入参**：query / path / header / body 的 schema（含必填、枚举）
+- **返回**：成功响应 `data` 的形态；错误时与 **TECH-004** 包络 `{ code, message, data }` 一致
+
+## 禁止
+
+- 仅加 Mock、不写或延后写 OpenAPI（「先跑起来再补」需在同一 PR 内完成）
+
+## 参考
+
+- 契约目录说明：`contracts/openapi/README.md`
+- 与后端导出对比：`PMP_Service/scripts/export_openapi.py`

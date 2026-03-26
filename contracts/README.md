@@ -7,6 +7,7 @@
 | 项 | 说明 |
 |----|------|
 | **当前真相** | 以本目录下的 **OpenAPI 文件**为讨论与 Mock 的基准；**可随时改**，改完在 PR 里说明影响面。 |
+| **Mock 与 YAML 同步** | **新增或变更 MSW Mock 接口时，须在同一变更中更新 `openapi/openapi.yaml`**（路径、功能、入参、返回写清）。详见 `openapi/README.md`。 |
 | **与实现对齐** | **PMP_Service** 实现稳定后，应用 `PMP_Service/scripts/export_openapi.py` 导出 JSON，与 `openapi/openapi.yaml` **diff**，择一合并或标注差异（以团队约定为准）。 |
 | **前端** | Mock（**MSW**，见 `PMP_Web/src/mocks/`）、**openapi-typescript** 等，路径指向 **`contracts/openapi/`**（见 `PMP_Web/docs/STRUCTURE.md`）。 |
 | **响应包络** | 与 **TECH-004** 一致：`{ "code", "message", "data" }`；业务成功 **`code === 0`**。 |

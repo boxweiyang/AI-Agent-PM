@@ -29,6 +29,9 @@ tags:
   - name: planning
     description: |
       REQ-M03 迭代、Story、Task（草案）；REQ-M04 在同一 Task 资源上扩展执行态（状态、负责人等）。
+  - name: db-catalog
+    description: |
+      REQ-M02D 数据库结构管理：结构化表/字段模型维护、DDL 导出、（Mock）AI 生成初稿、按表保存最近一次结构变更脚本。
 
 paths:
   /api/v1/health:
@@ -1539,6 +1542,259 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/db-catalog/config:
+    get:
+      tags: [db-catalog]
+      summary: 获取数据库结构配置（方言）
+      operationId: getDbCatalogConfig
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogConfig"
+    patch:
+      tags: [db-catalog]
+      summary: 更新数据库结构配置（方言）
+      operationId: patchDbCatalogConfig
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DbCatalogConfigPatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogConfig"
+
+  /api/v1/projects/{projectId}/db-catalog/tables:
+    get:
+      tags: [db-catalog]
+      summary: 获取表清单（含字段）
+      operationId: listDbCatalogTables
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogTableList"
+    post:
+      tags: [db-catalog]
+      summary: 新增表（含字段）
+      operationId: createDbCatalogTable
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DbCatalogTableCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogTable"
+
+  /api/v1/projects/{projectId}/db-catalog/tables/{tableId}:
+    get:
+      tags: [db-catalog]
+      summary: 获取表详情
+      operationId: getDbCatalogTable
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tableId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogTable"
+    patch:
+      tags: [db-catalog]
+      summary: 更新表与字段（保存后返回本表最近一次结构变更脚本）
+      operationId: patchDbCatalogTable
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tableId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DbCatalogTablePatchBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogTablePatchResult"
+    delete:
+      tags: [db-catalog]
+      summary: 删除表
+      operationId: deleteDbCatalogTable
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tableId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBase"
+
+  /api/v1/projects/{projectId}/db-catalog/tables/{tableId}/latest-alter:
+    get:
+      tags: [db-catalog]
+      summary: 获取本表最近一次结构变更脚本（仅保留一条）
+      operationId: getDbCatalogTableLatestAlter
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tableId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogLatestAlter"
+
+  /api/v1/projects/{projectId}/db-catalog/ddl:
+    post:
+      tags: [db-catalog]
+      summary: 生成建库/建表 DDL 脚本（可选模拟数据）
+      operationId: postDbCatalogGenerateDdl
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DbCatalogGenerateDdlRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogDdl"
+
+  /api/v1/projects/{projectId}/db-catalog/ai-generate:
+    post:
+      tags: [ai]
+      summary: AI 生成数据库结构初稿（Mock：基于最新已发布需求 + 模块细化最新版 + 技术文档）
+      operationId: postDbCatalogAiGenerate
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DbCatalogAiGenerateRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogAiGenerate"
+
+  /api/v1/projects/{projectId}/db-catalog/design-doc/generate:
+    post:
+      tags: [db-catalog]
+      summary: 根据当前数据库结构生成数据库设计文档（Markdown）
+      operationId: postDbCatalogGenerateDesignDoc
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DbCatalogGenerateDesignDocRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDbCatalogDesignDoc"
 
   /api/v1/projects/{projectId}/iterations:
     get:
@@ -3383,6 +3639,225 @@ components:
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ApiCatalogAiGenerateResultData" }
+
+    DbDialect:
+      type: string
+      enum: [sqlite, sqlserver, mysql]
+      description: 数据库方言（REQ-M02D V1 冻结）
+
+    DbCatalogConfig:
+      type: object
+      required: [dialect]
+      properties:
+        dialect:
+          allOf:
+            - $ref: "#/components/schemas/DbDialect"
+          nullable: true
+          description: 未选择时为 null；前端应禁用 AI/DDL 相关按钮
+
+    DbCatalogConfigPatchBody:
+      type: object
+      properties:
+        dialect:
+          allOf:
+            - $ref: "#/components/schemas/DbDialect"
+          nullable: true
+
+    DbCatalogField:
+      type: object
+      required: [id, name, logical_type, description, nullable, primary_key, auto_increment, unique]
+      properties:
+        id: { type: string, description: 字段 ID（实现可为 UUID；Mock 可用短 ID） }
+        name: { type: string, description: 物理列名 }
+        logical_type: { type: string, description: 逻辑类型（实现侧映射到方言类型） }
+        length: { type: integer, nullable: true, description: 长度/精度（可选） }
+        description: { type: string }
+        nullable: { type: boolean }
+        default_value: { type: string, nullable: true }
+        primary_key: { type: boolean }
+        auto_increment: { type: boolean }
+        unique: { type: boolean }
+        foreign_key_ref:
+          type: string
+          nullable: true
+          description: 外键引用（如 table.column），可选
+
+    DbCatalogTable:
+      type: object
+      required: [id, logical_name, physical_name, description, primary_key_notes, fields, updated_at]
+      properties:
+        id: { type: string }
+        logical_name: { type: string, description: 逻辑表名（业务名） }
+        physical_name: { type: string, description: 物理表名（建议下划线） }
+        description: { type: string }
+        primary_key_notes: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/DbCatalogField" }
+        updated_at: { type: string, format: date-time }
+
+    DbCatalogTableListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DbCatalogTable" }
+
+    DbCatalogTableCreateBody:
+      type: object
+      required: [logical_name, physical_name]
+      properties:
+        logical_name: { type: string }
+        physical_name: { type: string }
+        description: { type: string }
+        primary_key_notes: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/DbCatalogField" }
+
+    DbCatalogTablePatchBody:
+      type: object
+      properties:
+        logical_name: { type: string }
+        physical_name: { type: string }
+        description: { type: string }
+        primary_key_notes: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/DbCatalogField" }
+
+    DbCatalogLatestAlterData:
+      type: object
+      required: [table_id, sql]
+      properties:
+        table_id: { type: string }
+        sql: { type: string, description: 最近一次结构变更脚本（仅保留一条） }
+
+    DbCatalogTablePatchResultData:
+      type: object
+      required: [table, latest_alter]
+      properties:
+        table: { $ref: "#/components/schemas/DbCatalogTable" }
+        latest_alter: { $ref: "#/components/schemas/DbCatalogLatestAlterData" }
+
+    DbCatalogGenerateDdlRequest:
+      type: object
+      required: [dialect, scope]
+      properties:
+        dialect: { $ref: "#/components/schemas/DbDialect" }
+        scope:
+          type: string
+          enum: [all, table]
+          description: all=全项目表；table=仅指定 table_id
+        table_id:
+          type: string
+          nullable: true
+        include_database:
+          type: boolean
+          default: true
+          description: 是否包含建库语句（SQLite 为文件/库说明）
+        include_mock_data:
+          type: boolean
+          default: false
+          description: 是否附带模拟数据 INSERT
+
+    DbCatalogDdlData:
+      type: object
+      required: [dialect, sql]
+      properties:
+        dialect: { $ref: "#/components/schemas/DbDialect" }
+        sql: { type: string }
+
+    DbCatalogAiGenerateRequest:
+      type: object
+      required: [dialect]
+      properties:
+        dialect: { $ref: "#/components/schemas/DbDialect" }
+        context:
+          type: string
+          nullable: true
+          description: 可选：前端透传的上下文摘要；实现侧也可忽略并自行拉取「最新已发布需求 + 模块细化最新版 + 技术文档」
+
+    DbCatalogAiGenerateData:
+      type: object
+      required: [tables]
+      properties:
+        tables:
+          type: array
+          items: { $ref: "#/components/schemas/DbCatalogTable" }
+
+    DbCatalogGenerateDesignDocRequest:
+      type: object
+      required: [dialect]
+      properties:
+        dialect: { $ref: "#/components/schemas/DbDialect" }
+        include_ddl_snippets:
+          type: boolean
+          default: true
+          description: 是否在文档中包含简要 DDL 片段（可选）
+
+    DbCatalogDesignDocData:
+      type: object
+      required: [markdown]
+      properties:
+        markdown: { type: string }
+
+    EnvelopeDbCatalogConfig:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogConfig" }
+
+    EnvelopeDbCatalogTable:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogTable" }
+
+    EnvelopeDbCatalogTableList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogTableListData" }
+
+    EnvelopeDbCatalogLatestAlter:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogLatestAlterData" }
+
+    EnvelopeDbCatalogTablePatchResult:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogTablePatchResultData" }
+
+    EnvelopeDbCatalogDdl:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogDdlData" }
+
+    EnvelopeDbCatalogAiGenerate:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogAiGenerateData" }
+
+    EnvelopeDbCatalogDesignDoc:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/DbCatalogDesignDocData" }
 
     PlanningPriority:
       type: integer

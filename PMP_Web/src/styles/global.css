@@ -81,21 +81,24 @@ html.dark .el-card {
  *
  * 使用方式：给 el-dialog 添加 class="pmp-viewport-dialog"
  */
-.pmp-viewport-dialog :deep(.el-dialog__content) {
+.pmp-viewport-dialog .el-dialog,
+.pmp-viewport-dialog.el-dialog {
   max-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* 避免 Element Plus 默认 margin-top（15vh）导致弹窗顶部看起来“顶不住” */
+  margin-top: 0 !important;
 }
 
-.pmp-viewport-dialog :deep(.el-dialog__header) {
+.pmp-viewport-dialog .el-dialog__header {
   flex-shrink: 0;
 }
 
-.pmp-viewport-dialog :deep(.el-dialog__body) {
+.pmp-viewport-dialog .el-dialog__body {
   flex: 1;
   overflow: auto;
 }
 
-.pmp-viewport-dialog :deep(.el-dialog__footer) {
+.pmp-viewport-dialog .el-dialog__footer {
   flex-shrink: 0;
 }

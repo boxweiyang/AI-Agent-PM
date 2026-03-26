@@ -104,6 +104,19 @@ import {
   reorderPlanningStories,
   reorderPlanningTasks,
 } from '@/mocks/planningStore'
+import {
+  aiGenerateDbCatalogSchemaDraft,
+  createDbCatalogTable,
+  deleteDbCatalogTable,
+  generateDbCatalogDdl,
+  generateDbCatalogDesignDoc,
+  getDbCatalogConfig,
+  getDbCatalogTable,
+  getDbCatalogTableLatestAlter,
+  listDbCatalogTables,
+  patchDbCatalogConfig,
+  patchDbCatalogTable,
+} from '@/mocks/dbCatalogStore'
 import type {
   ApiCatalogAiGenerateMode,
   ApiCatalogConstraint,
@@ -1321,6 +1334,7 @@ export const handlers = [
       capability === 'requirement_doc_assist' ||
       capability === 'requirement_module_doc_assist' ||
       capability === 'tech_design_doc_assist' ||
+      capability === 'db_catalog_design_doc_assist' ||
       capability === 'api_catalog_constraint_assist' ||
       capability === 'iteration_requirement_doc_assist' ||
       capability === 'story_requirement_doc_assist'
@@ -1330,6 +1344,7 @@ export const handlers = [
       const message = String(payload?.message ?? '').trim()
       const markdown = String(payload?.markdown ?? '').trim()
       const lineCount = markdown ? markdown.split('\n').length : 0
+      const dialect = String(payload?.dialect ?? '')
       const modHint =
         capability === 'requirement_module_doc_assist'
           ? `\n\n【模块上下文】module_id=${String(payload?.module_id ?? '')} title=${String(payload?.module_title ?? '')}`
@@ -1391,6 +1406,30 @@ export const handlers = [
 ## 风险与待定项
 - 依赖与排期风险：（待确认）
 - 与需求未对齐处：标注「待确认」并列跟进人
+`
+            : capability === 'db_catalog_design_doc_assist'
+              ? `# 数据库设计文档
+
+## 方言与生成配置
+- 方言：${dialect || '（未指定）'}
+- 诉求摘要：${excerpt}
+
+## 表与字段总览
+- 目标：把业务实体/接口需求映射为可落库的表与字段
+- 说明：字段类型需与本方言映射表一致；无法确定处标注「待确认」
+
+## 关键约束建议
+- 主键：确保每表有明确主键与自增策略（如适用）
+- 唯一约束：用于去重/业务幂等关键字段
+- 外键：如存在引用关系，补充引用表/列与级联策略（可选）
+
+## DDL / 迁移策略建议
+- 生成：优先导出 CREATE TABLE 脚本
+- 修改：后续保存表结构时生成「每表仅保留最新一条」的变更脚本（ALTER/重建策略取决于方言实现）
+
+## 风险与待定项
+- 类型映射是否已在方言层对齐
+- 业务幂等/历史数据回填方案
 `
             : capability === 'iteration_requirement_doc_assist'
             ? `# 迭代需求说明
@@ -1483,6 +1522,12 @@ export const handlers = [
 - 技术栈是否已冻结？与项目详情中的填写是否一致？
 - 架构上最关键的边界是什么（鉴权、多租户、数据一致性）？
 - 非功能指标里哪一条是硬约束（延迟、吞吐、RPO/RTO）？`
+          : capability === 'db_catalog_design_doc_assist'
+            ? `### 下一步我需要你确认/补充的点
+- 方言/类型映射是否已确认（尤其是 int/string/datetime 等）
+- 每张表的主键策略与自增/非自增规则
+- 外键与唯一约束需要覆盖哪些业务边界
+- 保存后迁移脚本的生成策略：ALTER 还是重建表（按你实现阶段取舍）`
           : capability === 'iteration_requirement_doc_assist'
           ? `### 下一步我需要你确认/补充的点
 - 本迭代相对总需求文档，**独有**的交付边界是什么？
@@ -1774,6 +1819,116 @@ ${umsg || '（无）'}
     const r = deleteApiCatalogEndpoint(projectId, endpointId)
     if (!r.ok) return HttpResponse.json({ code: 40421, message: r.message, data: null })
     return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/db-catalog/config', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: getDbCatalogConfig(projectId) })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/db-catalog/config', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { dialect?: 'sqlite' | 'sqlserver' | 'mysql' | null }
+    return HttpResponse.json({ code: 0, message: 'ok', data: patchDbCatalogConfig(projectId, body) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/db-catalog/tables', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listDbCatalogTables(projectId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/db-catalog/tables', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    return HttpResponse.json({ code: 0, message: 'ok', data: createDbCatalogTable(projectId, body as never) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/db-catalog/tables/:tableId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const tableId = typeof params.tableId === 'string' ? params.tableId : params.tableId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const row = getDbCatalogTable(projectId, tableId)
+    if (!row) return HttpResponse.json({ code: 40401, message: '表不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: row })
+  }),
+
+  http.patch('/api/v1/projects/:projectId/db-catalog/tables/:tableId', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const tableId = typeof params.tableId === 'string' ? params.tableId : params.tableId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const r = patchDbCatalogTable(projectId, tableId, body as never)
+    if (!r.ok) return HttpResponse.json({ code: 40401, message: r.message, data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: r.data })
+  }),
+
+  http.delete('/api/v1/projects/:projectId/db-catalog/tables/:tableId', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const tableId = typeof params.tableId === 'string' ? params.tableId : params.tableId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const ok = deleteDbCatalogTable(projectId, tableId)
+    if (!ok) return HttpResponse.json({ code: 40401, message: '表不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/db-catalog/tables/:tableId/latest-alter', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const tableId = typeof params.tableId === 'string' ? params.tableId : params.tableId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: getDbCatalogTableLatestAlter(projectId, tableId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/db-catalog/ddl', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as {
+      dialect?: 'sqlite' | 'sqlserver' | 'mysql'
+      scope?: 'all' | 'table'
+      table_id?: string | null
+      include_database?: boolean
+      include_mock_data?: boolean
+    }
+    if (body.dialect !== 'sqlite' && body.dialect !== 'sqlserver' && body.dialect !== 'mysql') {
+      return HttpResponse.json({ code: 40001, message: 'dialect 必填', data: null })
+    }
+    const scope = body.scope === 'table' ? 'table' : 'all'
+    return HttpResponse.json({ code: 0, message: 'ok', data: generateDbCatalogDdl(projectId, { ...body, dialect: body.dialect, scope }) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/db-catalog/ai-generate', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { dialect?: 'sqlite' | 'sqlserver' | 'mysql' }
+    if (body.dialect !== 'sqlite' && body.dialect !== 'sqlserver' && body.dialect !== 'mysql') {
+      return HttpResponse.json({ code: 40001, message: 'dialect 必填', data: null })
+    }
+    return HttpResponse.json({ code: 0, message: 'ok', data: aiGenerateDbCatalogSchemaDraft(projectId, body.dialect) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/db-catalog/design-doc/generate', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { dialect?: 'sqlite' | 'sqlserver' | 'mysql'; include_ddl_snippets?: boolean }
+    if (body.dialect !== 'sqlite' && body.dialect !== 'sqlserver' && body.dialect !== 'mysql') {
+      return HttpResponse.json({ code: 40001, message: 'dialect 必填', data: null })
+    }
+    const include = body.include_ddl_snippets !== false
+    return HttpResponse.json({ code: 0, message: 'ok', data: generateDbCatalogDesignDoc(projectId, body.dialect, include) })
   }),
 
   http.post('/api/v1/projects/:projectId/api-catalog/endpoints/ai-generate', async ({ request, params }) => {

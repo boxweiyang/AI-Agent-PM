@@ -7,6 +7,7 @@ const IMPLEMENTED_PROJECT_MODULE_NAMES = new Set([
   'project-m02-requirements',
   'project-m02b-design',
   'project-m02c-apis',
+  'project-m02d-schema',
   'project-m03-iterations',
   'project-m04-tasks',
 ])
@@ -85,6 +86,12 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     name: 'project-m02c-apis',
     component: () => import('./pages/apis/ApiCatalogPage.vue'),
     meta: { title: '接口管理', artifactKey: 'api_catalog', reqRef: 'REQ-M02C' },
+  },
+  {
+    path: 'm02d/schema',
+    name: 'project-m02d-schema',
+    component: () => import('./pages/db/DatabaseSchemaPage.vue'),
+    meta: { title: '数据库结构', artifactKey: 'db_schema', reqRef: 'REQ-M02D' },
   },
   {
     path: 'm03/iterations/:iterationId/req-doc/versions/:versionId',

@@ -154,7 +154,7 @@
       :right-header="constraintDiffRightHeader"
     />
 
-    <el-dialog v-model="editDialog" :title="editingId ? '编辑接口' : '新增接口'" width="900px">
+    <el-dialog v-model="editDialog" :title="editingId ? '编辑接口' : '新增接口'" width="900px" class="pmp-viewport-dialog">
       <el-form label-width="100px">
         <el-form-item label="接口名"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="方法/地址">
@@ -179,7 +179,14 @@
           </el-select>
         </el-form-item>
         <el-form-item label="入参">
-          <div class="param-editor">
+          <div class="param-mode-row">
+            <el-radio-group v-model="requestParamMode">
+              <el-radio value="form">表单</el-radio>
+              <el-radio value="json">JSON</el-radio>
+            </el-radio-group>
+          </div>
+
+          <div v-if="requestParamMode === 'form'" class="param-editor">
             <div v-for="(p, idx) in form.request_params" :key="`req-${idx}`" class="param-row">
               <el-input v-model="p.name" placeholder="参数名" />
               <el-select v-model="p.in" style="width: 110px">
@@ -193,35 +200,67 @@
               <el-input v-model="p.description" placeholder="说明" />
               <el-button type="danger" link @click="form.request_params.splice(idx, 1)">删除</el-button>
             </div>
-            <el-button @click="form.request_params.push({ name: '', in: 'query', type: 'string', required: false, description: '' })">新增入参</el-button>
+            <el-button @click="form.request_params.push({ name: '', in: 'query', type: 'string', required: false, description: '' })">
+              新增入参
+            </el-button>
+          </div>
+
+          <div v-else class="json-editor">
+            <el-input
+              v-model="requestParamsJson"
+              type="textarea"
+              :rows="6"
+              placeholder="入参 JSON（数组）。示例：[{name,in,type,required,description}]"
+            />
           </div>
         </el-form-item>
-        <el-form-item label="成功出参">
-          <div class="param-editor">
-            <div v-for="(p, idx) in form.response_success_params" :key="`ok-${idx}`" class="param-row">
+
+        <el-form-item label="返回出参">
+          <div class="param-mode-row">
+            <el-radio-group v-model="responseParamMode">
+              <el-radio value="form">表单</el-radio>
+              <el-radio value="json">JSON</el-radio>
+            </el-radio-group>
+          </div>
+
+          <div v-if="responseParamMode === 'form'" class="param-editor">
+            <div v-for="(p, idx) in form.response_success_params" :key="`ret-${idx}`" class="param-row">
               <el-input v-model="p.name" placeholder="字段名" />
               <el-input v-model="p.type" placeholder="类型" />
               <el-input v-model="p.description" placeholder="说明" />
               <el-button type="danger" link @click="form.response_success_params.splice(idx, 1)">删除</el-button>
             </div>
-            <el-button @click="form.response_success_params.push({ name: '', type: 'string', description: '' })">新增成功字段</el-button>
+            <el-button @click="form.response_success_params.push({ name: '', type: 'string', description: '' })">
+              新增返回字段
+            </el-button>
           </div>
-        </el-form-item>
-        <el-form-item label="错误出参">
-          <div class="param-editor">
-            <div v-for="(p, idx) in form.response_error_params" :key="`err-${idx}`" class="param-row">
-              <el-input v-model="p.name" placeholder="字段名" />
-              <el-input v-model="p.type" placeholder="类型" />
-              <el-input v-model="p.description" placeholder="说明" />
-              <el-button type="danger" link @click="form.response_error_params.splice(idx, 1)">删除</el-button>
-            </div>
-            <el-button @click="form.response_error_params.push({ name: '', type: 'string', description: '' })">新增错误字段</el-button>
+
+          <div v-else class="json-editor">
+            <el-input
+              v-model="responseParamsJson"
+              type="textarea"
+              :rows="6"
+              placeholder="返回出参 JSON（数组）。示例：[{name,type,description}]"
+            />
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="editDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveEndpoint">保存</el-button>
+        <div class="edit-footer-wrap">
+          <el-button type="primary" plain @click="openDevPrompt">一键生成提示词</el-button>
+          <div class="edit-footer-actions">
+            <el-button @click="editDialog = false">取消</el-button>
+            <el-button type="primary" @click="saveEndpoint">保存</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="devPromptDialogVisible" title="开发提示词（可粘贴到 AI IDE）" width="720px" class="pmp-viewport-dialog" destroy-on-close>
+      <el-input v-model="devPromptText" type="textarea" :rows="22" readonly class="dev-prompt-textarea" />
+      <template #footer>
+        <el-button @click="devPromptDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="copyDevPrompt">复制全文</el-button>
       </template>
     </el-dialog>
 
@@ -286,6 +325,15 @@ const editDialog = ref(false)
 const editingId = ref('')
 const form = ref<ApiCatalogEndpoint>({ id: '', name: '', method: 'GET', path: '', summary: '', status: 'draft', group_refs: {}, request_params: [], response_success_params: [], response_error_params: [], fe_status: 'todo', be_status: 'todo', qa_status: 'todo', updated_at: '' })
 const aiDialog = ref(false); const aiMode = ref<ApiCatalogAiGenerateMode>('incremental')
+
+type ParamEditMode = 'form' | 'json'
+const requestParamMode = ref<ParamEditMode>('form')
+const responseParamMode = ref<ParamEditMode>('form')
+const requestParamsJson = ref('')
+const responseParamsJson = ref('')
+const devPromptDialogVisible = ref(false)
+const devPromptText = ref('')
+
 const taskBindDialog = ref(false)
 const taskOptions = ref<ApiCatalogTaskSummary[]>([])
 const bindingEndpointId = ref('')
@@ -460,9 +508,210 @@ async function openLatestResult() {
     ElMessage.info('暂无生成记录')
   }
 }
-function openCreate() { editingId.value = ''; form.value = { id: '', name: '', method: 'GET', path: '', summary: '', detail_description: '', status: 'draft', group_refs: {}, request_params: [], response_success_params: [], response_error_params: [], fe_status: 'todo', be_status: 'todo', qa_status: 'todo', updated_at: '' }; editDialog.value = true }
-function openEdit(row: ApiCatalogEndpoint) { editingId.value = row.id; form.value = { ...row, group_refs: { ...row.group_refs }, request_params: [...(row.request_params || [])], response_success_params: [...(row.response_success_params || [])], response_error_params: [...(row.response_error_params || [])] }; editDialog.value = true }
-async function saveEndpoint() { if (!projectId.value) return; if (editingId.value) await apiClient.patch(`/api/v1/projects/${projectId.value}/api-catalog/endpoints/${editingId.value}`, form.value); else await apiClient.post(`/api/v1/projects/${projectId.value}/api-catalog/endpoints`, form.value); editDialog.value = false; await fetchAll() }
+function openCreate() {
+  editingId.value = ''
+  form.value = {
+    id: '',
+    name: '',
+    method: 'GET',
+    path: '',
+    summary: '',
+    detail_description: '',
+    status: 'draft',
+    group_refs: {},
+    request_params: [],
+    response_success_params: [],
+    response_error_params: [],
+    fe_status: 'todo',
+    be_status: 'todo',
+    qa_status: 'todo',
+    updated_at: '',
+  }
+  requestParamMode.value = 'form'
+  responseParamMode.value = 'form'
+  requestParamsJson.value = JSON.stringify(form.value.request_params ?? [], null, 2)
+  responseParamsJson.value = JSON.stringify(form.value.response_success_params ?? [], null, 2)
+  editDialog.value = true
+}
+
+function openEdit(row: ApiCatalogEndpoint) {
+  editingId.value = row.id
+  // UI 将“成功/错误”合并为“返回出参”；在保存时统一落到 response_success_params，response_error_params 置空。
+  const returnParams = [...(row.response_success_params || []), ...(row.response_error_params || [])]
+  form.value = {
+    ...row,
+    group_refs: { ...(row.group_refs || {}) },
+    request_params: [...(row.request_params || [])],
+    response_success_params: returnParams,
+    response_error_params: [],
+  }
+  requestParamMode.value = 'form'
+  responseParamMode.value = 'form'
+  requestParamsJson.value = JSON.stringify(form.value.request_params ?? [], null, 2)
+  responseParamsJson.value = JSON.stringify(form.value.response_success_params ?? [], null, 2)
+  editDialog.value = true
+}
+
+function parseJsonToArray<T>(raw: string): T[] | null {
+  try {
+    const v = JSON.parse(raw)
+    return Array.isArray(v) ? (v as T[]) : null
+  } catch {
+    return null
+  }
+}
+
+watch(requestParamMode, (mode) => {
+  if (mode === 'json') {
+    requestParamsJson.value = JSON.stringify(form.value.request_params ?? [], null, 2)
+    return
+  }
+  // mode === 'form'：切回表单前尝试解析 JSON，避免“JSON 编辑了但切回表单丢失”
+  const parsed = parseJsonToArray<ApiCatalogEndpoint['request_params'][number]>(requestParamsJson.value)
+  if (!parsed) {
+    ElMessage.error('入参 JSON 格式错误：需要 JSON 数组')
+    requestParamMode.value = 'json'
+    return
+  }
+  form.value.request_params = parsed
+})
+
+watch(responseParamMode, (mode) => {
+  if (mode === 'json') {
+    responseParamsJson.value = JSON.stringify(form.value.response_success_params ?? [], null, 2)
+    return
+  }
+  const parsed = parseJsonToArray<ApiCatalogEndpoint['response_success_params'][number]>(responseParamsJson.value)
+  if (!parsed) {
+    ElMessage.error('返回出参 JSON 格式错误：需要 JSON 数组')
+    responseParamMode.value = 'json'
+    return
+  }
+  form.value.response_success_params = parsed
+})
+
+/** 与保存前一致：把 JSON 编辑区解析进 form，供保存与生成提示词共用 */
+function syncParamsFromEditorsToForm(): boolean {
+  if (requestParamMode.value === 'json') {
+    const parsed = parseJsonToArray<ApiCatalogEndpoint['request_params'][number]>(requestParamsJson.value)
+    if (!parsed) {
+      ElMessage.error('入参 JSON 格式错误：需要 JSON 数组')
+      return false
+    }
+    form.value.request_params = parsed
+  }
+  if (responseParamMode.value === 'json') {
+    const parsed = parseJsonToArray<ApiCatalogEndpoint['response_success_params'][number]>(responseParamsJson.value)
+    if (!parsed) {
+      ElMessage.error('返回出参 JSON 格式错误：需要 JSON 数组')
+      return false
+    }
+    form.value.response_success_params = parsed
+  }
+  return true
+}
+
+function endpointStatusLabel(s: ApiCatalogEndpoint['status']) {
+  const map: Record<string, string> = {
+    draft: '草稿',
+    reviewed: '已评审',
+    frozen: '已冻结',
+    deprecated: '已废弃',
+  }
+  return map[s] ?? s
+}
+
+function buildDevPrompt(): string {
+  const f = form.value
+  const gr = f.group_refs || {}
+  const taskLines = (f.bound_task_ids || [])
+    .map((id) => `- ${taskTitleMap.value[id] || id}`)
+  const reqPretty = JSON.stringify(f.request_params ?? [], null, 2)
+  const resPretty = JSON.stringify(f.response_success_params ?? [], null, 2)
+
+  return [
+    '你是一名熟悉本技术栈的后端/全栈工程师。请根据以下「接口规格」在现有项目中实现该 HTTP 接口（或补全 handler / 路由 / 校验 / 序列化）。',
+    '',
+    '## 项目上下文',
+    `- 项目 ID（路由参数）：${projectId.value || '（当前未解析到 projectId）'}`,
+    '',
+    '## 接口标识',
+    `- 接口名称：${f.name?.trim() || '（未填写）'}`,
+    `- HTTP 方法：${f.method}`,
+    `- 路径：${f.path?.trim() || '（未填写）'}`,
+    `- 功能说明：${f.summary?.trim() || '—'}`,
+    `- 文档状态：${endpointStatusLabel(f.status)}`,
+    '',
+    '## 归属与分组（便于定位代码目录/模块边界）',
+    `- 需求模块：${(gr.requirement_module as string | undefined)?.trim() || '—'}`,
+    `- 交付部分：${(gr.delivery_part as string | undefined)?.trim() || '—'}`,
+    `- 公共分组：${(gr.common_group as string | undefined)?.trim() || '—'}`,
+    '',
+    '## 详细说明（业务语义、调用时机、边界条件）',
+    f.detail_description?.trim() || '（未填写：请结合功能说明与参数表推断合理行为，并在实现前与产品/接口约定确认。）',
+    '',
+    '## 请求入参',
+    '以下为约定字段（name / in / type / required / description）；实现时请按 in 区分 path、query、header、body，并做类型与必填校验。',
+    '```json',
+    reqPretty,
+    '```',
+    '',
+    '## 返回出参（成功响应体字段约定）',
+    '以下为响应 JSON 中应包含或对外暴露的字段（name / type / description）。若项目有统一 envelope（如 code/message/data），请把业务数据放在约定位置。',
+    '```json',
+    resPretty,
+    '```',
+    '',
+    '## 关联 Task（若有，请与验收标准对齐）',
+    taskLines.length ? taskLines.join('\n') : '— 当前未绑定 Task',
+    '',
+    '## 实现时请一并考虑',
+    '- **鉴权与权限**：该接口应对哪些角色/租户开放；是否需要登录态、项目成员校验等。',
+    '- **错误与 HTTP 状态码**：参数校验失败、业务规则不满足、下游失败时，使用项目统一的错误响应结构；必要时补充文档中的错误码说明。',
+    '- **幂等与并发**：若涉及创建/扣款/发通知等副作用，说明是否要求幂等键或去重策略。',
+    '- **性能与安全**：分页/限流/敏感字段脱敏/SQL 注入与 XSS 防护等按项目规范处理。',
+    '- **可测试性**：补充或更新最小单测、契约测试或接口快照，便于回归。',
+    '',
+    '请先简要说明你将修改或新增的文件与主要步骤，再给出实现代码。',
+  ].join('\n')
+}
+
+function openDevPrompt() {
+  if (!syncParamsFromEditorsToForm()) return
+  devPromptText.value = buildDevPrompt()
+  devPromptDialogVisible.value = true
+}
+
+async function copyDevPrompt() {
+  const text = devPromptText.value
+  if (!text) {
+    ElMessage.warning('没有可复制的内容')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    ElMessage.error('复制失败，请手动全选复制')
+  }
+}
+
+async function saveEndpoint() {
+  if (!projectId.value) return
+
+  if (!syncParamsFromEditorsToForm()) return
+
+  // UI 不再区分成功/错误：保存时统一回写到 response_success_params，清空 response_error_params
+  form.value.response_error_params = []
+
+  if (editingId.value)
+    await apiClient.patch(`/api/v1/projects/${projectId.value}/api-catalog/endpoints/${editingId.value}`, form.value)
+  else
+    await apiClient.post(`/api/v1/projects/${projectId.value}/api-catalog/endpoints`, form.value)
+
+  editDialog.value = false
+  await fetchAll()
+}
 async function removeEndpoint(id: string) { if (!projectId.value) return; await apiClient.delete(`/api/v1/projects/${projectId.value}/api-catalog/endpoints/${id}`); await fetchAll() }
 function onEndpointActionCommand(row: ApiCatalogEndpoint, command: string | number) {
   const cmd = String(command)
@@ -516,6 +765,8 @@ function goTaskPage() {
 .line { display: flex; width: 100%; gap: 8px; }
 .param-editor { width: 100%; display: flex; flex-direction: column; gap: 8px; }
 .param-row { display: grid; grid-template-columns: 1fr 120px 1fr 120px 1fr 60px; gap: 8px; align-items: center; }
+.param-mode-row { margin-bottom: 8px; }
+.json-editor { width: 100%; }
 .api-expand { padding: 8px 12px; background: var(--el-fill-color-lighter); border-radius: 8px; }
 .api-expand-title { margin: 8px 0; font-weight: 600; }
 .action-more-btn {
@@ -534,5 +785,23 @@ function goTaskPage() {
   line-height: 1.6;
   white-space: pre-wrap;
   color: var(--el-text-color-regular);
+}
+.edit-footer-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.edit-footer-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.dev-prompt-textarea :deep(textarea) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>
