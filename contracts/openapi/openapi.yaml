@@ -2565,6 +2565,156 @@ paths:
               schema:
                 $ref: "#/components/schemas/EnvelopeBase"
 
+  /api/v1/projects/{projectId}/tasks/{taskId}/comments:
+    get:
+      tags: [planning]
+      summary: Task 评论列表（V1）
+      operationId: listPlanningTaskComments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskCommentList"
+    post:
+      tags: [planning]
+      summary: 新增 Task 评论（V1）
+      operationId: createPlanningTaskComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningTaskCommentCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskComment"
+
+  /api/v1/projects/{projectId}/tasks/{taskId}/attachments:
+    get:
+      tags: [planning]
+      summary: Task 附件列表（V1）
+      operationId: listPlanningTaskAttachments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskAttachmentList"
+    post:
+      tags: [planning]
+      summary: 新增 Task 附件（V1，可先存文件名/URL）
+      operationId: createPlanningTaskAttachment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningTaskAttachmentCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskAttachment"
+
+  /api/v1/projects/{projectId}/tasks/{taskId}/test-submissions:
+    get:
+      tags: [planning]
+      summary: Task 提测记录列表（V1）
+      operationId: listPlanningTaskTestSubmissions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskTestSubmissionList"
+    post:
+      tags: [planning]
+      summary: 发起提测（V1）
+      operationId: createPlanningTaskTestSubmission
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningTaskTestSubmissionCreateBody"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlanningTaskTestSubmission"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4079,7 +4229,7 @@ components:
     PlanningTaskStatus:
       type: string
       description: REQ-M04 看板列（V1 四列）
-      enum: [todo, in_progress, testing, done]
+      enum: [todo, in_progress, testing, done, defect]
 
     PlanningTask:
       type: object
@@ -4107,6 +4257,18 @@ components:
         sort_order: { type: integer }
         status: { $ref: "#/components/schemas/PlanningTaskStatus" }
         assigned_user_id: { type: string, nullable: true, description: REQ-M05 人力池用户 id }
+        estimated_days: { type: number, nullable: true, description: 任务预估天数（人天） }
+        dev_owner_id: { type: string, nullable: true, description: 开发负责人（人力池用户 id 或登录名） }
+        qa_owner_id: { type: string, nullable: true, description: 测试负责人（人力池用户 id 或登录名） }
+        current_owner_id: { type: string, nullable: true, description: 当前负责人（按状态自动流转） }
+        dev_started_at: { type: string, format: date-time, nullable: true, description: 首次进入 in_progress 时间 }
+        dev_completed_at: { type: string, format: date-time, nullable: true, description: 首次进入 testing 时间（开发完成） }
+        testing_started_at: { type: string, format: date-time, nullable: true, description: 测试开始时间 }
+        testing_completed_at: { type: string, format: date-time, nullable: true, description: 首次进入 done 时间（测试完成） }
+        flow_records:
+          type: array
+          description: Task 状态/负责人流转记录（最新在后）
+          items: { $ref: "#/components/schemas/PlanningTaskFlowRecord" }
         linked_endpoint_ids:
           type: array
           items: { type: string }
@@ -4137,10 +4299,25 @@ components:
         sort_order: { type: integer }
         status: { $ref: "#/components/schemas/PlanningTaskStatus" }
         assigned_user_id: { type: string, nullable: true }
+        estimated_days: { type: number, nullable: true }
+        dev_owner_id: { type: string, nullable: true }
+        qa_owner_id: { type: string, nullable: true }
         linked_endpoint_ids:
           type: array
           items: { type: string }
         ai_batch_id: { type: string, nullable: true }
+
+    PlanningTaskFlowRecord:
+      type: object
+      required: [id, action, operator, at, note]
+      properties:
+        id: { type: string }
+        action: { type: string, description: 如 status_change / owner_assign_dev / owner_assign_qa }
+        from_status: { $ref: "#/components/schemas/PlanningTaskStatus", nullable: true }
+        to_status: { $ref: "#/components/schemas/PlanningTaskStatus", nullable: true }
+        operator: { type: string }
+        at: { type: string, format: date-time }
+        note: { type: string }
 
     PlanningTaskListData:
       type: object
@@ -4163,3 +4340,128 @@ components:
         - type: object
           properties:
             data: { $ref: "#/components/schemas/PlanningTaskListData" }
+
+    PlanningTaskComment:
+      type: object
+      required: [id, task_id, content, created_by, created_at]
+      properties:
+        id: { type: string }
+        task_id: { type: string }
+        content: { type: string }
+        created_by: { type: string, description: 展示名/用户 id（实现层可替换为用户实体） }
+        created_at: { type: string, format: date-time }
+
+    PlanningTaskCommentCreateBody:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+
+    PlanningTaskCommentListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningTaskComment" }
+
+    EnvelopePlanningTaskComment:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTaskComment" }
+
+    EnvelopePlanningTaskCommentList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTaskCommentListData" }
+
+    PlanningTaskAttachment:
+      type: object
+      required: [id, task_id, name, url, created_by, created_at]
+      properties:
+        id: { type: string }
+        task_id: { type: string }
+        name: { type: string }
+        url: { type: string, description: V1 可为文件 URL 或文本链接 }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+
+    PlanningTaskAttachmentCreateBody:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: string }
+
+    PlanningTaskAttachmentListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningTaskAttachment" }
+
+    EnvelopePlanningTaskAttachment:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTaskAttachment" }
+
+    EnvelopePlanningTaskAttachmentList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTaskAttachmentListData" }
+
+    PlanningTaskTestSubmissionStatus:
+      type: string
+      enum: [pending, testing, passed, rejected]
+
+    PlanningTaskTestSubmission:
+      type: object
+      required: [id, task_id, submission_no, status, environment_notes, test_notes, created_by, created_at]
+      properties:
+        id: { type: string }
+        task_id: { type: string }
+        submission_no: { type: string, description: 如 ST-001 }
+        status: { $ref: "#/components/schemas/PlanningTaskTestSubmissionStatus" }
+        environment_notes: { type: string, description: 部署地址/分支/构建号等 }
+        test_notes: { type: string, description: 测试要点与风险提示 }
+        reject_reason: { type: string, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+
+    PlanningTaskTestSubmissionCreateBody:
+      type: object
+      required: [environment_notes, test_notes]
+      properties:
+        environment_notes: { type: string }
+        test_notes: { type: string }
+
+    PlanningTaskTestSubmissionListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningTaskTestSubmission" }
+
+    EnvelopePlanningTaskTestSubmission:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTaskTestSubmission" }
+
+    EnvelopePlanningTaskTestSubmissionList:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeBase"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/PlanningTaskTestSubmissionListData" }

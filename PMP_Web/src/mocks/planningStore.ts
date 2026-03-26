@@ -40,6 +40,24 @@ function nextId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function pushFlow(
+  row: PlanningTask,
+  action: string,
+  from_status: PlanningTaskStatus | null,
+  to_status: PlanningTaskStatus | null,
+  note: string,
+) {
+  row.flow_records.push({
+    id: nextId('flow'),
+    action,
+    from_status,
+    to_status,
+    operator: '当前用户（Mock）',
+    at: nowIso(),
+    note,
+  })
+}
+
 function seedDemo1(): ProjectPlanningState {
   const t0 = nowIso()
   const iter1: PlanningIteration = {
@@ -118,6 +136,15 @@ function seedDemo1(): ProjectPlanningState {
       sort_order: 0,
       status: 'done',
       assigned_user_id: null,
+      estimated_days: 3,
+      dev_owner_id: 'dev.zhang',
+      qa_owner_id: 'qa.li',
+      current_owner_id: 'qa.li',
+      dev_started_at: t0,
+      dev_completed_at: t0,
+      testing_started_at: t0,
+      testing_completed_at: t0,
+      flow_records: [],
       linked_endpoint_ids: [],
       ai_batch_id: null,
       created_at: t0,
@@ -134,6 +161,15 @@ function seedDemo1(): ProjectPlanningState {
       sort_order: 1,
       status: 'in_progress',
       assigned_user_id: null,
+      estimated_days: 2,
+      dev_owner_id: 'dev.wang',
+      qa_owner_id: 'qa.zhao',
+      current_owner_id: 'dev.wang',
+      dev_started_at: t0,
+      dev_completed_at: null,
+      testing_started_at: null,
+      testing_completed_at: null,
+      flow_records: [],
       linked_endpoint_ids: [],
       ai_batch_id: null,
       created_at: t0,
@@ -150,6 +186,15 @@ function seedDemo1(): ProjectPlanningState {
       sort_order: 0,
       status: 'testing',
       assigned_user_id: null,
+      estimated_days: 2,
+      dev_owner_id: 'dev.chen',
+      qa_owner_id: 'qa.sun',
+      current_owner_id: 'qa.sun',
+      dev_started_at: t0,
+      dev_completed_at: t0,
+      testing_started_at: t0,
+      testing_completed_at: null,
+      flow_records: [],
       linked_endpoint_ids: [],
       ai_batch_id: null,
       created_at: t0,
@@ -166,6 +211,15 @@ function seedDemo1(): ProjectPlanningState {
       sort_order: 0,
       status: 'todo',
       assigned_user_id: null,
+      estimated_days: 1,
+      dev_owner_id: null,
+      qa_owner_id: null,
+      current_owner_id: null,
+      dev_started_at: null,
+      dev_completed_at: null,
+      testing_started_at: null,
+      testing_completed_at: null,
+      flow_records: [],
       linked_endpoint_ids: [],
       ai_batch_id: null,
       created_at: t0,
@@ -218,6 +272,15 @@ function seedMinimal(projectId: string): ProjectPlanningState {
     sort_order: 0,
     status: 'todo',
     assigned_user_id: null,
+    estimated_days: null,
+    dev_owner_id: null,
+    qa_owner_id: null,
+    current_owner_id: null,
+    dev_started_at: null,
+    dev_completed_at: null,
+    testing_started_at: null,
+    testing_completed_at: null,
+    flow_records: [],
     linked_endpoint_ids: [],
     ai_batch_id: null,
     created_at: t0,
@@ -432,6 +495,15 @@ export function createPlanningTask(projectId: string, storyId: string, body: Pla
     sort_order,
     status: 'todo',
     assigned_user_id: null,
+    estimated_days: null,
+    dev_owner_id: null,
+    qa_owner_id: null,
+    current_owner_id: null,
+    dev_started_at: null,
+    dev_completed_at: null,
+    testing_started_at: null,
+    testing_completed_at: null,
+    flow_records: [],
     linked_endpoint_ids: body.linked_endpoint_ids ? [...body.linked_endpoint_ids] : [],
     ai_batch_id: null,
     created_at: t0,
@@ -445,16 +517,50 @@ export function patchPlanningTask(projectId: string, taskId: string, patch: Plan
   const s = ensureState(projectId)
   const row = s.tasks.find((x) => x.id === taskId)
   if (!row) return { ok: false as const, message: 'Task 不存在' }
+  const beforeStatus = row.status
   if (patch.title !== undefined) row.title = patch.title
   if (patch.description !== undefined) row.description = patch.description
   if (patch.type_suggestion !== undefined) row.type_suggestion = patch.type_suggestion
   if (patch.priority !== undefined) row.priority = patch.priority
   if (patch.sort_order !== undefined) row.sort_order = patch.sort_order
+  if (patch.estimated_days !== undefined) row.estimated_days = patch.estimated_days
+  if (patch.dev_owner_id !== undefined) row.dev_owner_id = patch.dev_owner_id
+  if (patch.qa_owner_id !== undefined) row.qa_owner_id = patch.qa_owner_id
+  if (patch.dev_started_at !== undefined) row.dev_started_at = patch.dev_started_at
+  if (patch.dev_completed_at !== undefined) row.dev_completed_at = patch.dev_completed_at
+  if (patch.testing_started_at !== undefined) row.testing_started_at = patch.testing_started_at
+  if (patch.testing_completed_at !== undefined) row.testing_completed_at = patch.testing_completed_at
   if (patch.status !== undefined) row.status = patch.status as PlanningTaskStatus
   if (patch.assigned_user_id !== undefined) row.assigned_user_id = patch.assigned_user_id
   if (patch.linked_endpoint_ids !== undefined) row.linked_endpoint_ids = [...patch.linked_endpoint_ids]
   if (patch.ai_batch_id !== undefined) row.ai_batch_id = patch.ai_batch_id
-  row.updated_at = nowIso()
+  const now = nowIso()
+  if (patch.status !== undefined && patch.status !== beforeStatus) {
+    if (patch.status === 'in_progress') {
+      row.dev_started_at = row.dev_started_at ?? now
+      row.current_owner_id = row.dev_owner_id ?? row.assigned_user_id ?? null
+    } else if (patch.status === 'testing') {
+      row.dev_completed_at = row.dev_completed_at ?? now
+      row.current_owner_id = row.qa_owner_id ?? null
+    } else if (patch.status === 'done') {
+      row.testing_completed_at = row.testing_completed_at ?? now
+      row.current_owner_id = row.qa_owner_id ?? row.current_owner_id ?? null
+    } else if (patch.status === 'defect') {
+      row.current_owner_id = row.qa_owner_id ?? row.current_owner_id ?? null
+    } else if (patch.status === 'todo') {
+      row.current_owner_id = row.dev_owner_id ?? null
+    }
+    pushFlow(row, 'status_change', beforeStatus, row.status, `状态由 ${beforeStatus} 变更为 ${row.status}`)
+  }
+  if (patch.dev_owner_id !== undefined) {
+    pushFlow(row, 'owner_assign_dev', null, null, `开发负责人设为 ${patch.dev_owner_id || '-'}`)
+    if (row.status === 'in_progress') row.current_owner_id = patch.dev_owner_id ?? null
+  }
+  if (patch.qa_owner_id !== undefined) {
+    pushFlow(row, 'owner_assign_qa', null, null, `测试负责人设为 ${patch.qa_owner_id || '-'}`)
+    if (row.status === 'testing' || row.status === 'done') row.current_owner_id = patch.qa_owner_id ?? null
+  }
+  row.updated_at = now
   return { ok: true as const, data: row }
 }
 

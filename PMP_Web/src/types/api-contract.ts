@@ -484,7 +484,17 @@ export type PlanningAiApplyResultData = {
 
 export type PlanningTaskTypeSuggestion = 'frontend' | 'backend' | 'qa' | 'devops' | 'other'
 
-export type PlanningTaskStatus = 'todo' | 'in_progress' | 'testing' | 'done'
+export type PlanningTaskStatus = 'todo' | 'in_progress' | 'testing' | 'done' | 'defect'
+
+export type PlanningTaskFlowRecord = {
+  id: string
+  action: string
+  from_status: PlanningTaskStatus | null
+  to_status: PlanningTaskStatus | null
+  operator: string
+  at: string
+  note: string
+}
 
 export type PlanningTask = {
   id: string
@@ -497,6 +507,15 @@ export type PlanningTask = {
   sort_order: number
   status: PlanningTaskStatus
   assigned_user_id: string | null
+  estimated_days: number | null
+  dev_owner_id: string | null
+  qa_owner_id: string | null
+  current_owner_id: string | null
+  dev_started_at: string | null
+  dev_completed_at: string | null
+  testing_started_at: string | null
+  testing_completed_at: string | null
+  flow_records: PlanningTaskFlowRecord[]
   linked_endpoint_ids: string[]
   ai_batch_id: string | null
   created_at: string
@@ -521,6 +540,13 @@ export type PlanningTaskPatchBody = Partial<
     | 'sort_order'
     | 'status'
     | 'assigned_user_id'
+    | 'estimated_days'
+    | 'dev_owner_id'
+    | 'qa_owner_id'
+    | 'dev_started_at'
+    | 'dev_completed_at'
+    | 'testing_started_at'
+    | 'testing_completed_at'
     | 'linked_endpoint_ids'
     | 'ai_batch_id'
   >
@@ -528,6 +554,63 @@ export type PlanningTaskPatchBody = Partial<
 
 export type PlanningTaskListData = {
   items: PlanningTask[]
+}
+
+export type PlanningTaskComment = {
+  id: string
+  task_id: string
+  content: string
+  created_by: string
+  created_at: string
+}
+
+export type PlanningTaskCommentCreateBody = {
+  content: string
+}
+
+export type PlanningTaskCommentListData = {
+  items: PlanningTaskComment[]
+}
+
+export type PlanningTaskAttachment = {
+  id: string
+  task_id: string
+  name: string
+  url: string
+  created_by: string
+  created_at: string
+}
+
+export type PlanningTaskAttachmentCreateBody = {
+  name: string
+  url: string
+}
+
+export type PlanningTaskAttachmentListData = {
+  items: PlanningTaskAttachment[]
+}
+
+export type PlanningTaskTestSubmissionStatus = 'pending' | 'testing' | 'passed' | 'rejected'
+
+export type PlanningTaskTestSubmission = {
+  id: string
+  task_id: string
+  submission_no: string
+  status: PlanningTaskTestSubmissionStatus
+  environment_notes: string
+  test_notes: string
+  reject_reason: string | null
+  created_by: string
+  created_at: string
+}
+
+export type PlanningTaskTestSubmissionCreateBody = {
+  environment_notes: string
+  test_notes: string
+}
+
+export type PlanningTaskTestSubmissionListData = {
+  items: PlanningTaskTestSubmission[]
 }
 
 /** GET …/requirement-doc/modules */

@@ -105,6 +105,14 @@ import {
   reorderPlanningTasks,
 } from '@/mocks/planningStore'
 import {
+  createTaskAttachment,
+  createTaskComment,
+  createTaskTestSubmission,
+  listTaskAttachments,
+  listTaskComments,
+  listTaskTestSubmissions,
+} from '@/mocks/taskCollabStore'
+import {
   aiGenerateDbCatalogSchemaDraft,
   createDbCatalogTable,
   deleteDbCatalogTable,
@@ -2478,5 +2486,74 @@ ${umsg || '（无）'}
     const r = deletePlanningTask(projectId, taskId)
     if (!r.ok) return HttpResponse.json({ code: 40425, message: r.message, data: null })
     return HttpResponse.json({ code: 0, message: 'ok', data: null })
+  }),
+
+  http.get('/api/v1/projects/:projectId/tasks/:taskId/comments', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningTask(projectId, taskId)) return HttpResponse.json({ code: 40425, message: 'Task 不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listTaskComments(projectId, taskId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/tasks/:taskId/comments', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningTask(projectId, taskId)) return HttpResponse.json({ code: 40425, message: 'Task 不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { content?: string }
+    if (!body.content?.trim()) return HttpResponse.json({ code: 40001, message: 'content 必填', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: createTaskComment(projectId, taskId, { content: body.content }) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/tasks/:taskId/attachments', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningTask(projectId, taskId)) return HttpResponse.json({ code: 40425, message: 'Task 不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listTaskAttachments(projectId, taskId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/tasks/:taskId/attachments', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningTask(projectId, taskId)) return HttpResponse.json({ code: 40425, message: 'Task 不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { name?: string; url?: string }
+    if (!body.name?.trim() || !body.url?.trim()) return HttpResponse.json({ code: 40001, message: 'name/url 必填', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: createTaskAttachment(projectId, taskId, { name: body.name, url: body.url }) })
+  }),
+
+  http.get('/api/v1/projects/:projectId/tasks/:taskId/test-submissions', ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningTask(projectId, taskId)) return HttpResponse.json({ code: 40425, message: 'Task 不存在', data: null })
+    return HttpResponse.json({ code: 0, message: 'ok', data: listTaskTestSubmissions(projectId, taskId) })
+  }),
+
+  http.post('/api/v1/projects/:projectId/tasks/:taskId/test-submissions', async ({ request, params }) => {
+    if (!bearerOk(request)) return HttpResponse.json({ code: 40100, message: '未登录', data: null }, { status: 401 })
+    const projectId = typeof params.projectId === 'string' ? params.projectId : params.projectId?.[0] ?? ''
+    const taskId = typeof params.taskId === 'string' ? params.taskId : params.taskId?.[0] ?? ''
+    if (!mockProjects.find((r) => r.id === projectId)) return HttpResponse.json({ code: 40401, message: '项目不存在', data: null })
+    if (!getPlanningTask(projectId, taskId)) return HttpResponse.json({ code: 40425, message: 'Task 不存在', data: null })
+    const body = (await request.json().catch(() => ({}))) as { environment_notes?: string; test_notes?: string }
+    if (!body.environment_notes?.trim() || !body.test_notes?.trim()) {
+      return HttpResponse.json({ code: 40001, message: 'environment_notes/test_notes 必填', data: null })
+    }
+    return HttpResponse.json({
+      code: 0,
+      message: 'ok',
+      data: createTaskTestSubmission(projectId, taskId, {
+        environment_notes: body.environment_notes,
+        test_notes: body.test_notes,
+      }),
+    })
   }),
 ]

@@ -109,6 +109,7 @@
                 <el-option label="进行中" value="in_progress" />
                 <el-option label="待测试" value="testing" />
                 <el-option label="已完成" value="done" />
+                <el-option label="有缺陷" value="defect" />
               </el-select>
               <el-select v-model="typeFilter" clearable placeholder="类型" style="width: 120px">
                 <el-option label="前端" value="frontend" />
@@ -124,7 +125,14 @@
 
         <div class="table-scroll">
           <el-table v-loading="loading" :data="displayTasks" row-key="id" stripe>
-            <el-table-column prop="title" label="Task" min-width="200" />
+            <el-table-column label="Task" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">
+                <div class="task-title-wrap">
+                  <span class="task-title">{{ row.title }}</span>
+                  <el-button link type="primary" size="small" @click="goTaskDetail(row.id)">详情</el-button>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column label="迭代" width="140" show-overflow-tooltip>
               <template #default="{ row }">
                 {{ storyContext.get(row.story_id)?.iterationName ?? row.iteration_id }}
@@ -148,6 +156,7 @@
                   <el-option label="进行中" value="in_progress" />
                   <el-option label="待测试" value="testing" />
                   <el-option label="已完成" value="done" />
+                  <el-option label="有缺陷" value="defect" />
                 </el-select>
               </template>
             </el-table-column>
@@ -513,7 +522,7 @@ async function loadAll() {
 }
 
 function onStatusChange(row: PlanningTask, v: string) {
-  if (v === 'todo' || v === 'in_progress' || v === 'testing' || v === 'done') {
+  if (v === 'todo' || v === 'in_progress' || v === 'testing' || v === 'done' || v === 'defect') {
     void patchStatus(row, v)
   }
 }
@@ -563,6 +572,14 @@ function clearEndpointFilter() {
     name: 'project-m04-tasks',
     params: { projectId: projectId.value },
     query: q,
+  })
+}
+
+function goTaskDetail(taskId: string) {
+  if (!projectId.value || !taskId) return
+  void router.push({
+    name: 'project-m04-task-detail',
+    params: { projectId: projectId.value, taskId },
   })
 }
 
@@ -769,6 +786,17 @@ onMounted(() => {
 .table-scroll :deep(.el-table) {
   flex: 1;
   min-height: 0;
+}
+.task-title-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.task-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .doc-meta-alert {
   margin-bottom: 12px;

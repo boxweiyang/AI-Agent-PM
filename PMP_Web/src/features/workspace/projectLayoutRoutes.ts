@@ -124,6 +124,12 @@ export const projectLayoutChildren: RouteRecordRaw[] = [
     meta: { title: '迭代与 Story', artifactKey: 'iteration_board', reqRef: 'REQ-M03' },
   },
   {
+    path: 'm04/tasks/:taskId',
+    name: 'project-m04-task-detail',
+    component: () => import('./pages/tasks/TaskDetailPage.vue'),
+    meta: { title: 'Task 详情', artifactKey: 'task_board', reqRef: 'REQ-M04' },
+  },
+  {
     path: 'm04/tasks',
     name: 'project-m04-tasks',
     component: () => import('./pages/tasks/TasksExecutionPage.vue'),
